@@ -1,0 +1,47 @@
+# Builds the Windows installer and the Linux AppImage on GitHub's machines whenever a version tag
+# (like v1.2.0) is pushed, and publishes them as a GitHub Release. Installed apps find updates there.
+name: Build & release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  draft:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: Create draft release (notes come from the tag message)
+        env: { GH_TOKEN: '${{ secrets.GITHUB_TOKEN }}' }
+        run: |
+          git fetch --force --tags
+          git tag -l --format='%(contents)' "$GITHUB_REF_NAME" > notes.md
+          [ -s notes.md ] || echo "Dungeons Desk $GITHUB_REF_NAME" > notes.md
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --draft --title "Dungeons Desk $GITHUB_REF_NAME" --notes-file notes.md
+
+  build:
+    needs: draft
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm }
+      - run: npm ci
+      - name: Build and upload
+        run: npx electron-builder --publish always
+        env: { GH_TOKEN: '${{ secrets.GITHUB_TOKEN }}' }
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish the release
+        env: { GH_TOKEN: '${{ secrets.GITHUB_TOKEN }}' }
+        run: gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft=false --latest

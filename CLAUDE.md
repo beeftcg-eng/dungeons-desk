@@ -1,0 +1,105 @@
+# Dungeons Desk
+
+An Electron desktop app for D&D 5e Dungeon Masters. Its tools are notes/wiki, an NPC and monster generator, initiative plus an encounter builder, battle maps with fog of war, a token maker, handouts, loot, a timeline and calendar, a rules reference, a dice roller and settings. Players' phones connect over the LAN for the turn order, handouts, a shared wiki, the map, and their own character page.
+
+## Run
+
+```bash
+npm start            # electron . --no-sandbox
+```
+
+There is no build step, bundler or TypeScript. Edit the files and restart the app. Reloading the window (Ctrl+R) picks up renderer changes. Changes to `main.js` or `server.js` need a full restart.
+
+## Layout
+
+- `main.js`: main process. Holds the config (`~/.config/Dungeons Desk/config.json`: current vault, port, and the `campaigns` list of known vault folders), campaign create/open/rename, file access for the vault, all IPC handlers, and printing/PDF (renders HTML in a hidden window).
+- `server.js`: `PlayerServer` on port 7777, falling back to the next free port. It serves `player/` and `shared/`, serves `<vault>/.dmtools/media/` at `/media/`, and pushes live state over **Server-Sent Events** at `/events?player=Name`. Phones are **read-only** apart from these exceptions:
+  - `/api/notes?player=Name` (GET/POST): each player's private notes page, stored in `<vault>/.dmtools/players/`.
+  - `POST /api/move`, `/api/ping` and `/api/token`: player map actions. The server only validates their shape and forwards them (via the `player:action` IPC) to `Maps.playerAction()`. That function is the security check: a player can only move a token whose `owner` matches their name, only when the map is shown and `playerMove` is on. Pings are rate-limited, and tokens are image-only with a 3 MB cap.
+
+  Keep the list that short. `viewFor()` decides which handouts, wiki pages and character card each phone gets. `/wiki-img/` serves only images referenced by shared wiki pages (`pub.wikiImages`).
+- `preload.js`: exposes `window.dm.*` (vault, notes, state, media, file, print, server). It is the only bridge between the renderer and Node.
+- `renderer/`: the DM UI. Plain `<script>` tags loaded in a fixed order (see `index.html`), each defining one global module (`U`, `Store`, `MD`, `Statblock`, `Notes`, `Generators`, `Tokens`, `Handouts`, `Loot`, `Initiative`, `Settings`, `App`). **There are no ES modules**, because they don't load reliably from `file://`. Each view module exports `mount(root)` and can also export `onShow()`.
+- `main.js` also handles:
+  - **Per-note version history** in `.dmtools/history/<encoded path>/<ts>.md`. A snapshot is taken at most every 10 minutes on save, plus one before delete; 60 are kept.
+  - **Daily backups** to `~/Documents/Dungeons Desk Backups/<campaign>/<date>/`, excluding history; 14 are kept.
+  - **Note images** saved to `<vault>/Attachments/`.
+  - **The `vault://local/<path>` protocol**, which shows vault images in the DM window only.
+- `renderer/js/dice.js`: the floating roller (Ctrl+D). Any element with `.roll[data-roll]` is clickable: Shift = advantage, Ctrl/Alt = disadvantage. `MD.decorateText(el)` turns dice text and stat-block attack bonuses into `.roll` spans and adds condition tooltips.
+- `renderer/js/rules.js` + `renderer/js/data/srd-ref.js`: the SRD reference (monsters, spells, items, conditions, rules). `srd-ref.js` is **generated** by `scripts/convert_srd.py` from 5e-bits/5e-database JSON (CC-BY-4.0, attribution in `SRDREF.attribution`). Don't edit it by hand.
+- `renderer/js/initiative.js`: the tracker and the encounter builder (2024 XP budgets). All state changes go through `act(logText, fn)`, which records undo history and the combat log. Conditions are `{name, rounds}`; old string conditions are converted on read by `conds()`. Combatants added from stat blocks keep `c.sb`, which the "Now:" panel uses.
+- `renderer/js/maps.js` + `shared/map-render.js`: battle maps. Fog is an ordered op list (reveal/hide rect/brush/all), drawn by the same code on the DM screen (55% fog) and on phones (opaque). Hidden tokens are never published.
+  - Each map can also hold `drawings`, AoE `templates` (circle/cone/line/cube, sized in 5 ft steps by `templateShape`), live `rulers` (grid distance where every square is 5 ft, diagonals included) and `pings`.
+  - Tokens have an `owner` (a party member's name). When an owned token moves, a fog-reveal swath `vision` squares wide is added.
+  - Player tokens come from `party[].token`, which the player uploads from the phone's Me tab or the DM picks in Settings.
+  - Pings carry the sender's time, so phones stamp their own `seen` time to cope with clock differences.
+- `renderer/js/timeline.js`: the in-world calendar (`Store.calendar`) and timeline. A note appears there if its frontmatter has `world_date:`, written as `1024`, `1024-3-15` or `15 Thawmonth 1024`.
+- **Player wiki**: notes with `share: players` (or `share: [Name, …]`) in their frontmatter are rendered by `MD.render(src, { forPlayers })`, which strips `[!secret]` callouts and `%% comments %%`, unlinks unshared notes and rewrites image URLs. `Notes.playerWiki()` caches the result.
+- **Relationships**: write `- [[Target]] — label` lines under a `## Relationships` heading. They are parsed by `Notes.relationsIn()`, colored by `relColor()`, and drawn in Graph → Relationship web.
+- `renderer/js/homebrew.js`: campaign homebrew stored as notes. Monsters are any note with a stat block; spells and items are notes with `type: spell` / `type: item` frontmatter, in `Homebrew/…`. `Homebrew.list()` feeds Rules (★ entries, "My campaign" filter), the creature pickers and the loot generator.
+- `renderer/js/importer.js`: three ways in:
+  - **Paste-text parsers** for monster stat blocks (2014 and 2024 layouts), spells (including D&D Beyond's label/value layout) and items.
+  - **Open5e search**, through the main process's `web:open5e` IPC, which is restricted to `api.open5e.com/v1/...`.
+  - **JSON file import** (Open5e or 5e-database shape).
+
+  D&D Beyond links are deliberately not fetched: there's no public API and its terms forbid scraping. Users paste the text instead. Parser fixtures can be unit-tested in Node by stubbing `U`.
+- `renderer/js/campaigns.js`: the campaign picker (rail button + Settings). Switching saves pending work, tells main to change vault, then **reloads the window** so every module re-mounts on the new vault. New campaigns go to `~/Documents/Dungeons Desk Campaigns/<Name>/`, with an overview note, standard folders and `.dmtools/campaign.json` (display name). Example notes are only seeded on the very first run or when asked for, never into a folder the user opens.
+- `renderer/js/macros.js`: editor macros. Typing `/` at the start of a line, pressing Alt+1…8, or clicking ＋ Insert runs them. Each macro is `{id, group, label, icon, hotkey?, run(ctx)}` and returns `{text}` (inserted), `{replaceAll}` (blank note gets the full template), or `null`. Format macros reuse `Templates`; when inserted into a non-empty note the frontmatter is dropped and headings are demoted one level. Add new macros here.
+- `renderer/js/data/`: static data. `srd.js` has CR/XP/PB tables, creature-type flavor and conditions. `names.js` has NPC name and trait tables. `loot-data.js` has treasure tables and SRD magic items.
+- `shared/`: code and CSS used by **both** the DM app and the phone page (`handout.js` → `renderHandout()`, `handout.css`, `statblock.css`).
+- `player/index.html`: the phone page, self-contained with inline CSS and JS.
+- `seed/examples/`: sample campaign notes. `seed/guide/Guide/`: how-to notes, one per feature area (`0 Start Here` is opened first). Both are copied without overwriting: into a brand-new vault on first run, into a new campaign when its checkboxes are ticked, or on demand from Settings (`vault:addSeed`). **When you add or change a feature, update the matching guide note.**
+- `build/`: icon sources (`icon.svg` → PNGs and `icon.ico` via `magick`). Also `buildResources` for electron-builder.
+- `renderer/js/themes.js`: color themes. These are CSS variables set on `:root`, plus `data-mode="light"` for light themes, whose overrides live at the end of `styles.css`. When adding UI, use the variables (`--bg`, `--panel`, `--text`, `--accent`, `--accent-ink`, …) instead of hard-coded dark colors.
+- `player/index.html` also contains the first-time **tour** (`TOUR` steps, `dm.tour.done` in localStorage). Update it when phone features change.
+
+## Data
+
+- **Notes** are plain `.md` files in the vault (default `~/Documents/Dungeons Desk Vault`). The vault should stay Obsidian-compatible.
+- **Everything else** lives in `<vault>/.dmtools/state.json` through `Store`: party, initiative, handouts, loot tables, token sheet and player-view options. Call `Store.save()` (debounced) after mutating `Store.get()`. Call `publishToPlayers()` after any change phones should see.
+- **Tokens** export as transparent PNGs. Outside the token shape is always transparent, and inside it is too wherever the image is, unless "Fill behind the image" is ticked. Initials tokens always fill. "Save all as PNGs" copies the sheet's files out of `media/` via the `tokens:exportFiles` IPC.
+- **Images** (handout images, tokens) are written to `.dmtools/media/` via `dm.media.save(dataUrl)`. The renderer shows them with `App.mediaUrl(file)`. Phones get them from `/media/file`.
+
+## Conventions and gotchas
+
+- Build DOM with `U.h('tag.class#id', {attrs, onclick}, ...children)`. `util.js` patches `Element.prototype.append/prepend` so they accept nested arrays and skip `null`/`false`, the same as `h()`. Rely on that, and don't "fix" it.
+- Use `U.modal`, `U.prompt`, `U.confirm` and `U.toast` instead of native dialogs.
+- Note markdown extensions are in `markdown.js`: `[[wikilinks]]`, `#tags`, `> [!read-aloud]` / `> [!secret]` callouts, YAML frontmatter shown as properties, and ` ```statblock ` YAML blocks rendered by `Statblock.render()`.
+- Stat block YAML keys: `name size type alignment ac ac_note hp hit_dice speed initiative str..cha saves[] skills senses passive languages cr traits actions bonus_actions reactions legendary_desc legendary_actions`. Entries are `{name, desc}`, and `desc` supports inline markdown. Use 2024 wording (`*Melee Attack Roll:* +5, reach 5 ft. *Hit:* 7 (1d8 + 3) Slashing damage.`).
+- The renderer has a CSP in `index.html`. Fonts load from Google Fonts. If you load anything new from outside, update the CSP.
+- Keep phone-facing data minimal and filtered in `publishToPlayers()` (`util.js`): hidden combatants, enemy HP and DM secrets must never reach phones.
+
+## Testing
+
+There are no unit tests. Use the smoke harness, which screenshots every view and logs console errors. **Always use a throwaway HOME** so it never touches the real vault or config:
+
+```bash
+S=$(mktemp -d); mkdir -p $S/home $S/shots
+HOME=$S/home SHOTS=$S/shots timeout 90 node_modules/electron/dist/electron --no-sandbox scripts/smoke.js
+cat $S/shots/log.txt      # console warnings/errors (the CSP "Security Warning" lines from phone windows are expected)
+```
+
+The smoke harness takes these options (setup code runs through `executeJavaScript`, because the app's CSP blocks `eval`):
+- `VIEWS=notes,initiative` limits which views it captures.
+- `PRE_<view>="js"` runs JS in the renderer before capturing that view.
+- `PHONE=1` also captures the phone page. Combine it with `PHONE_TABS=turns,handouts,wiki,map,char`, `PHONE_PLAYER=Thorin`, `PHONE_WIKI=<page title>` and `PHONE_EVAL="js"` (run on the phone page, which can `fetch` the server).
+- `EXTRA="js"` logs the result of an expression.
+
+Look at the PNGs to check the layout. Run `node --check` on edited JS files.
+
+If the real app is already running on port 7777, the smoke run uses the next free port. `PHONE=1` asks the app which port it got.
+
+## Packaging, releases and updates
+
+- **electron-builder** config is the `build` field in `package.json`. It produces the Linux AppImage and the Windows NSIS installer, and publishes to GitHub `beeftcg-eng/dungeons-desk`.
+- **Releases** are built by `.github/workflows/release.yml`. On a `v*` tag it creates a draft (release notes come from the annotated tag's message), builds on Ubuntu and Windows runners, then publishes the release.
+- To ship a version, run `npm run release -- patch "notes"` (`scripts/release.js`). It commits any changes, bumps the version, tags and pushes. Only release when the user asks.
+- **electron-updater** (in `main.js`, `setupUpdater`) checks GitHub on startup and every 6 hours. It's only active in packaged Windows and AppImage builds; source runs show "running from source" in Settings → Updates. Downloads are differential (blockmaps).
+- Local packaging check: `npx electron-builder --linux --publish never`, then run `dist/*.AppImage` with a throwaway `HOME`.
+- Packaged Linux builds add `--no-sandbox` themselves. Windows uses `app.getPath('documents')` (which may be redirected to OneDrive), so never hard-code `~/Documents`.
+
+## Environment
+
+- Fedora Atomic (`/home` → `/var/home`). The user's own launcher is `~/.local/share/applications/dungeons-desk.desktop`. It runs the **source folder** with `node_modules/electron/dist/electron` from `/var/home/beef/Desktop/DmTools`, so it always runs the latest code (and it can't self-update). Don't move the folder without updating the launcher. To restart it after changes, run `kill` on the old process, then `setsid -f gtk-launch dungeons-desk`. Icons are installed in `~/.local/share/icons/hicolor/*/apps/dungeons-desk.png`.
+- Electron 33. Its `npm install` postinstall extraction silently fails on this machine (Node 26). The README has the manual unzip fix.
+- Runtime dependencies are `marked@12` (UMD build loaded in the renderer), `js-yaml@4` and `qrcode` (main process only).

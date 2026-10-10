@@ -1,0 +1,105 @@
+# Dungeons Desk
+
+**A desktop toolkit for Dungeon Masters running D&D 5e.** It has:
+- a campaign wiki, NPC and monster generators, and a token maker
+- player handouts, loot tables, initiative and encounter building
+- battle maps with fog of war, a timeline, an SRD rules reference and homebrew
+
+Players join from their phones over Wi-Fi, with no app to install.
+
+## Download
+
+Get the latest version from the **[Releases page](https://github.com/beeftcg-eng/dungeons-desk/releases/latest)**:
+
+| System | File |
+|---|---|
+| Windows 10/11 (64-bit) | `Dungeons-Desk-Setup-<version>.exe` |
+| Linux (64-bit) | `Dungeons-Desk-<version>-linux-x86_64.AppImage` |
+
+### Installing on Windows
+1. Download `Dungeons-Desk-Setup-<version>.exe` and double-click it.
+2. Windows may show **"Windows protected your PC"**. This happens because the app isn't code-signed (signing certificates cost money). Click **More info → Run anyway**.
+3. Choose where to install (the default is fine), then click **Install**. Shortcuts appear on your desktop and in the Start menu.
+4. The first time you open it, Windows Firewall asks about network access. **Allow it on Private networks**, otherwise players' phones can't connect.
+
+### Installing on Linux
+1. Download the `.AppImage` file.
+2. Make it executable: right-click it → **Properties → Permissions → Allow executing file as program**, or run `chmod +x Dungeons-Desk-*.AppImage` in a terminal.
+3. Double-click it to run.
+   - On **Ubuntu 22.04 or newer**, AppImages need FUSE 2: `sudo apt install libfuse2` (on 24.04 the package is `libfuse2t64`).
+   - To add it to your app menu, use [Gear Lever](https://flathub.org/apps/it.mijorus.gearlever) or [AppImageLauncher](https://github.com/TheAssassin/AppImageLauncher). Otherwise, keep the file somewhere permanent, such as `~/Applications`.
+4. If your firewall is on (e.g. `ufw`), allow the player port: `sudo ufw allow 7777/tcp`.
+
+### Updates
+When a new version is published, the app tells you. Open **⚙ Settings → Updates**, click **Download update**, then **Restart and update**. Only the changed parts are downloaded. Your campaigns are never touched by updates: they live in `Documents/`, not in the app folder.
+
+### First steps
+The first campaign includes a **Guide** folder (start with *0 Start Here*) that explains every feature. To add the guide to an existing campaign, use **⚙ Settings → 📘 Add the how-to guide**.
+
+## What's inside
+
+| Tool | What it does |
+|---|---|
+| 📜 **Notes** | A wiki like Obsidian or World Anvil: Markdown files, `[[wikilinks]]`, backlinks, `#tags`, a graph view, and a quick switcher (Ctrl+O). It has templates for NPCs, monsters, encounters, locations, history/lore, factions, sessions and player characters. **Macros:** type `/` at the start of a line, or press Alt+1…8, to insert a format (NPC, character, monster, encounter, location, lore, faction, session), a block, or freshly rolled content (random NPC, monster, treasure, loot-table rolls). It renders read-aloud boxes, DM secrets and 5e (2024-style) stat blocks, and has a form-based stat block builder. |
+| 🎲 **Generate** | NPCs (name, appearance, personality, ideal, bond, flaw, secret, hook, and an optional stat block) and monsters at any CR, type, size and combat role. Reroll any single line. Save straight into your notes. |
+| 🪙 **Tokens** | Crop any image into a round or square token with a gold, silver, bronze or colored border, a name banner and a number badge. Save transparent PNGs for virtual tabletops one at a time, or save the whole token sheet as PNGs in one go. You can also print the sheet at real size (1" Medium, 2" Large…). |
+| ✉ **Handouts** | Letters, journal pages, torn notes, wanted posters, decrees and arcane scrolls. Reveal one to the whole party or to specific players, and it pops up on their phones. |
+| 💰 **Loot** | Treasure by CR tier (individual or hoard), with coins, gems, art and SRD magic items. You can also build weighted loot tables with dice (`2d6 gp`) and nested tables (`[[Trinkets]]`). |
+| ⏳ **Initiative** | Tracks turn order, HP, AC and conditions, with hidden monsters and auto-numbered groups. You can add creatures straight from stat blocks in your notes. Space moves to the next turn. |
+
+| 🧭 **Map** | Battle maps with fog of war: paint or box-select areas to reveal or hide them, snap tokens to the grid, and ping spots. Players see it on their phones and on the TV window. |
+| 📅 **Timeline** | An in-world calendar you can advance by day, week or month, plus a timeline of every note that has a `world_date`. |
+| 📖 **Rules** | Search 341 SRD monsters, 339 spells, 262 magic items, all the conditions and the core rules. Add monsters straight to initiative, the encounter builder or your bestiary. |
+| 🎲 **Dice** | A floating roller (Ctrl+D) with advantage/disadvantage and roll history. Dice, attack bonuses, checks and saves in notes and stat blocks can be clicked to roll. |
+
+**Map tools:** 📏 measure (players see it live), ✏ draw, 💥 AoE templates (sphere, cone, line, cube, sized in feet), 📍 ping, and an eraser. Right-click a token to choose which player controls it. Player tokens can clear the fog around themselves as they move (set the radius per map).
+
+**Homebrew & import:** in 📖 Rules, use **+ Homebrew** to create monsters, spells and magic items that live in this campaign (marked ★; they also show up in the encounter builder, initiative and the loot generator). Use **📥 Import** to:
+- **paste** a stat block, spell or item copied from D&D Beyond, a PDF or a website
+- search the free **Open5e** library (SRD, Tome of Beasts, Creature Codex, Deep Magic…)
+- load a **JSON** file
+
+D&D Beyond links can't be fetched directly, because D&D Beyond has no public API and doesn't allow scraping. Copy and paste the text instead.
+
+More in the notes: paste or drag images into a note (they're stored in `Attachments/`), 🕘 version history for every note, 👥 share a note with players, and relationship lines (`- [[Mira]] — ally`) under `## Relationships`, which show up in Graph → Relationship web.
+
+Initiative also has death saves, concentration checks, conditions that run out after a set number of rounds, lair actions, undo (Ctrl+Z), a combat log, a stat-block panel for whoever's turn it is, and an **Encounter builder** tab that uses the 2024 XP budgets.
+
+Backups: a full copy of each campaign is saved once a day in `~/Documents/Dungeons Desk Backups/` (the last 14 are kept).
+
+## Players' phones
+
+The **Initiative** page shows a QR code and an address like `http://192.168.0.4:7777`. Players on the same Wi-Fi open it and pick their character. They get five tabs: the live turn order (their phone buzzes when it's their turn), handouts, a **Wiki** of the notes you've shared, the **Map**, and **Me**, which shows their character's HP, AC, conditions and death saves, a **token maker** (they pick a photo and frame it; it becomes their token on your map), and a private notes page that's saved on your computer. On the Map tab players can **drag their own token**, **measure** and **ping**. **Open player display window** gives a big-screen view for a TV.
+
+Phones can only view things, apart from each player's own notes page, moving the tokens you've assigned to them, pinging, and uploading their own token. They can't change anything in your game. DM secret boxes, hidden monsters and hidden map tokens are never sent to phones.
+
+## Files
+
+- Notes are plain `.md` files in the vault, so you can back them up, sync them, or open the vault in Obsidian.
+- Handouts, loot tables, the token sheet and initiative are saved in `<vault>/.dmtools/`.
+
+## For developers
+
+```bash
+git clone https://github.com/beeftcg-eng/dungeons-desk.git
+cd dungeons-desk
+npm install
+npm start
+```
+
+- `npm run dist:linux` / `npm run dist:win` builds installers locally into `dist/`.
+- **Publishing an update:** `npm run release -- patch "What changed"`. Use `minor` or `major` for bigger changes. This bumps the version, tags it and pushes. GitHub Actions (`.github/workflows/release.yml`) then builds the Windows installer and the Linux AppImage and publishes them as a release. Installed copies pick the update up from there.
+
+## Credits
+Includes material from the System Reference Document 5.2 and 5.1 by Wizards of the Coast LLC, licensed under [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/legalcode). SRD data via [5e-bits/5e-database](https://github.com/5e-bits/5e-database) (MIT). Open5e search via [open5e.com](https://open5e.com). Dungeons Desk is unofficial fan software and isn't affiliated with Wizards of the Coast or D&D Beyond.
+
+## Troubleshooting (building from source)
+
+If `npm install` leaves Electron without its binary (`node_modules/electron/dist` holds only a `locales` folder), extract the downloaded zip by hand:
+
+```bash
+Z=$(find ~/.cache/electron -name 'electron-v33*linux-x64.zip' | head -1)
+rm -rf node_modules/electron/dist && mkdir node_modules/electron/dist
+python3 -m zipfile -e "$Z" node_modules/electron/dist && chmod +x node_modules/electron/dist/electron
+printf electron > node_modules/electron/path.txt
+```

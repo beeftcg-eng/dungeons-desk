@@ -1,0 +1,525 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#17141f">
+<title>Dungeons Desk</title>
+<link rel="icon" href="/icon.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Libre+Baskerville&family=IM+Fell+English:ital@0;1&family=Caveat:wght@500&family=Homemade+Apple&family=Special+Elite&family=UnifrakturMaguntia&display=swap">
+<link rel="stylesheet" href="/shared/handout.css">
+<style>
+  :root { --bg: #17141f; --panel: #262134; --panel2: #2e283f; --line: #3b3450; --text: #e8e2f0; --dim: #9d94b3; --accent: #e0a458; --red: #d9443a; --blue: #5fb3e8; --green: #4caf50; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; min-height: 100%; }
+  header { position: sticky; top: 0; z-index: 5; background: rgba(23,20,31,.95); backdrop-filter: blur(6px); border-bottom: 1px solid var(--line); padding: 10px 16px env(safe-area-inset-top); padding-top: calc(10px + env(safe-area-inset-top)); display: flex; align-items: center; gap: 10px; }
+  header h1 { font-family: 'Cinzel', serif; font-size: 18px; margin: 0; color: var(--accent); flex: 1; }
+  header .me { font-size: 13px; color: var(--dim); background: none; border: 1px solid var(--line); border-radius: 14px; padding: 4px 10px; color: var(--text); }
+  .status { width: 9px; height: 9px; border-radius: 50%; background: var(--red); }
+  .status.ok { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  nav { display: flex; gap: 6px; padding: 10px 16px 0; }
+  nav button { flex: 1; padding: 11px; font-size: 15px; background: var(--panel); border: 1px solid var(--line); color: var(--dim); border-radius: 10px; position: relative; }
+  nav button.on { color: var(--accent); border-color: var(--accent); background: var(--panel2); }
+  .badge { position: absolute; top: -6px; right: -4px; background: var(--red); color: #fff; font-size: 12px; border-radius: 10px; padding: 1px 7px; }
+  main { padding: 14px 16px calc(40px + env(safe-area-inset-bottom)); max-width: 700px; margin: 0 auto; }
+  .pane { display: none; } .pane.on { display: block; }
+  .round { font-family: 'Cinzel', serif; text-align: center; color: var(--dim); margin: 4px 0 12px; }
+  .round b { color: var(--accent); font-size: 22px; }
+  .banner { text-align: center; padding: 16px; border-radius: 12px; margin-bottom: 12px; font-family: 'Cinzel', serif; font-weight: 700; font-size: 24px; }
+  .banner.turn { background: linear-gradient(180deg, #e0a458, #b8762f); color: #1d1408; animation: pulse 1.4s infinite; }
+  .banner.deck { background: var(--panel2); border: 1px solid var(--accent); color: var(--accent); font-size: 17px; }
+  @keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(224,164,88,.6); } 50% { box-shadow: 0 0 0 10px rgba(224,164,88,0); } }
+  .c { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--red); border-radius: 10px; margin-bottom: 7px; transition: .2s; }
+  .c.k-pc { border-left-color: var(--blue); } .c.k-ally { border-left-color: var(--green); }
+  .c.cur { background: #3a2f22; border-color: var(--accent); transform: scale(1.02); box-shadow: 0 4px 18px rgba(224,164,88,.25); }
+  .c.me { outline: 2px solid var(--blue); outline-offset: 1px; }
+  .c.down { opacity: .45; } .c.down .n { text-decoration: line-through; }
+  .c .arrow { width: 18px; color: var(--accent); font-size: 18px; }
+  .c .n { font-size: 17px; font-weight: 600; flex: 1; }
+  .c .s { font-size: 12.5px; color: var(--dim); text-align: right; }
+  .s.Bloodied { color: #f0a040; } .s.Down { color: var(--red); } .s.Healthy { color: #8be08f; }
+  .conds { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
+  .cond { font-size: 11px; background: #3f2a52; color: #e4c8ff; padding: 1px 7px; border-radius: 8px; }
+  .empty { text-align: center; color: var(--dim); padding: 50px 10px; }
+  .empty .big { font-size: 48px; }
+  .ho-card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; margin-bottom: 10px; display: flex; align-items: center; gap: 12px; }
+  .ho-card .t { flex: 1; font-weight: 600; } .ho-card .new { background: var(--red); color: #fff; font-size: 11px; padding: 2px 7px; border-radius: 8px; }
+  .ho-card .when { font-size: 12px; color: var(--dim); font-weight: 400; }
+  .viewer { position: fixed; inset: 0; background: rgba(8,6,12,.96); z-index: 20; overflow: auto; padding: calc(56px + env(safe-area-inset-top)) 12px 40px; }
+  .viewer .close { position: fixed; top: calc(10px + env(safe-area-inset-top)); right: 12px; background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 20px; padding: 8px 16px; font-size: 15px; z-index: 21; }
+  .viewer .received { position: fixed; top: calc(14px + env(safe-area-inset-top)); left: 16px; color: var(--accent); font-family: 'Cinzel', serif; }
+  .viewer .handout { padding: 28px 22px 40px; font-size: 16px; }
+  .viewer .handout.ho-wanted { margin: 24px 12px; }
+  .join { max-width: 420px; margin: 30px auto; padding: 0 16px; text-align: center; }
+  .join h2 { font-family: 'Cinzel', serif; color: var(--accent); }
+  .join .pcs { display: flex; flex-direction: column; gap: 8px; margin: 18px 0; }
+  .join button, .join input { font-size: 17px; padding: 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); color: var(--text); width: 100%; }
+  .join button:active { border-color: var(--accent); }
+  .join .go { background: linear-gradient(180deg, #e0a458, #c8873a); color: #1d1408; font-weight: 700; border: none; margin-top: 8px; }
+  .join .or { color: var(--dim); margin: 14px 0 8px; }
+  nav button { font-size: 13px; padding: 9px 2px; }
+  .date { font-size: 12px; color: var(--dim); text-align: center; padding: 6px 0 0; font-family: 'Cinzel', serif; }
+  .date:empty { display: none; }
+  /* Wiki */
+  .wsearch { width: 100%; font-size: 16px; padding: 11px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); color: var(--text); margin-bottom: 10px; }
+  .wgroup { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--dim); margin: 14px 0 6px; }
+  .witem { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 6px; font-weight: 600; }
+  .wback { background: none; border: 1px solid var(--line); color: var(--text); border-radius: 16px; padding: 6px 14px; margin-bottom: 10px; }
+  .article { line-height: 1.6; font-size: 16px; }
+  .article h1 { font-family: 'Cinzel', serif; color: var(--accent); font-size: 26px; margin: 0 0 10px; }
+  .article h2 { font-family: 'Cinzel', serif; color: #e8c48f; font-size: 19px; border-bottom: 1px solid var(--line); padding-bottom: 3px; margin: 20px 0 8px; }
+  .article a.wikilink { color: var(--accent); border-bottom: 1px dotted; text-decoration: none; }
+  .article img { max-width: 100%; border-radius: 8px; }
+  .article table { border-collapse: collapse; display: block; overflow-x: auto; } .article td, .article th { border: 1px solid var(--line); padding: 4px 8px; }
+  .article blockquote { margin: 10px 0; padding: 8px 14px; border-left: 3px solid var(--line); color: #cfc6de; }
+  .article .callout-read-aloud { background: #efe3c8; color: #2b2116; border-left: 6px solid #58180d; font-family: 'Libre Baskerville', Georgia, serif; }
+  .article .callout-title { font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 4px; }
+  .article .props { display: flex; flex-wrap: wrap; gap: 6px 16px; background: var(--panel); border-radius: 8px; padding: 8px 12px; font-size: 13px; margin-bottom: 12px; }
+  .article .prop span { display: block; font-size: 10px; text-transform: uppercase; color: var(--dim); }
+  .article .tag { color: var(--accent); font-size: 13px; }
+  .article .statblock { color: #1f1a14; }
+  /* Map */
+  .mapwrap { position: relative; height: calc(100vh - 170px); min-height: 300px; background: #0d0b12; border-radius: 10px; overflow: hidden; touch-action: none; }
+  .mapwrap canvas { display: block; width: 100%; height: 100%; }
+  .mapbtns { position: absolute; right: 8px; top: 8px; display: flex; flex-direction: column; gap: 6px; }
+  .mapbtns button { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--line); background: rgba(38,33,52,.9); color: var(--text); font-size: 20px; }
+  .maptools { position: absolute; left: 8px; bottom: 8px; display: flex; gap: 4px; background: rgba(23,20,31,.85); border-radius: 22px; padding: 4px; }
+  .maptools button { border: none; background: none; color: var(--text); font-size: 15px; padding: 8px 12px; border-radius: 18px; }
+  .maptools button.on { background: var(--accent); color: #1d1408; font-weight: 700; }
+  .maphint { position: absolute; left: 50%; transform: translateX(-50%); top: 40px; background: rgba(23,20,31,.9); padding: 4px 12px; border-radius: 12px; font-size: 12px; color: var(--dim); white-space: nowrap; }
+  .tokmaker { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+  .tokmaker canvas { width: 140px; height: 140px; border-radius: 50%; background: repeating-conic-gradient(#2a2536 0 25%, #221e2c 0 50%) 0 0 / 16px 16px; touch-action: none; }
+  .tokmaker .ctl { flex: 1; min-width: 160px; display: flex; flex-direction: column; gap: 8px; }
+  .tokmaker input[type=range] { width: 100%; }
+  .btn { border: 1px solid var(--line); background: var(--panel2); color: var(--text); border-radius: 10px; padding: 10px 14px; font-size: 15px; }
+  .btn.primary { background: linear-gradient(180deg, #e0a458, #c8873a); color: #1d1408; border: none; font-weight: 700; }
+  .rings { display: flex; gap: 6px; } .rings button { width: 28px; height: 28px; border-radius: 50%; border: 2px solid rgba(255,255,255,.3); }
+  .rings button.on { border-color: #fff; box-shadow: 0 0 0 2px var(--accent); }
+  .mapname { position: absolute; left: 10px; top: 8px; font-family: 'Cinzel', serif; color: var(--accent); text-shadow: 0 1px 3px #000; }
+  /* Me */
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-bottom: 12px; }
+  .pcname { font-family: 'Cinzel', serif; font-size: 24px; color: var(--accent); }
+  .stats { display: flex; gap: 10px; margin: 10px 0; }
+  .stat { flex: 1; background: var(--bg); border-radius: 10px; padding: 8px; text-align: center; }
+  .stat b { display: block; font-size: 24px; } .stat span { font-size: 11px; color: var(--dim); text-transform: uppercase; }
+  .hpbar { height: 8px; background: var(--bg); border-radius: 4px; overflow: hidden; } .hpbar i { display: block; height: 100%; }
+  .ds { display: flex; gap: 14px; align-items: center; margin-top: 8px; font-size: 14px; }
+  .pip { width: 14px; height: 14px; border-radius: 50%; border: 2px solid; display: inline-block; margin-right: 2px; }
+  .pip.ok { border-color: var(--green); } .pip.ok.on { background: var(--green); } .pip.bad { border-color: var(--red); } .pip.bad.on { background: var(--red); }
+  .mynotes { width: 100%; min-height: 45vh; font-size: 16px; line-height: 1.5; padding: 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--text); resize: vertical; }
+  .saved { font-size: 12px; color: var(--dim); text-align: right; }
+  /* First-time tour */
+  .tut-dim { position: fixed; inset: 0; background: rgba(5,3,10,.72); z-index: 30; }
+  .tut-card { position: fixed; left: 12px; right: 12px; bottom: calc(14px + env(safe-area-inset-bottom)); z-index: 32; background: var(--panel); border: 1px solid var(--accent); border-radius: 16px; padding: 18px 18px 14px; box-shadow: 0 14px 40px rgba(0,0,0,.6); max-width: 560px; margin: 0 auto; }
+  .tut-card .big { font-size: 40px; line-height: 1; }
+  .tut-card h3 { font-family: 'Cinzel', serif; color: var(--accent); margin: 8px 0 6px; font-size: 20px; }
+  .tut-card p { margin: 0 0 8px; line-height: 1.5; color: var(--text); }
+  .tut-card ul { margin: 0 0 8px; padding-left: 20px; line-height: 1.6; }
+  .tut-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+  .tut-dots { flex: 1; display: flex; gap: 5px; } .tut-dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--line); } .tut-dots i.on { background: var(--accent); }
+  .tut-row button { border: 1px solid var(--line); background: var(--panel2); color: var(--text); border-radius: 10px; padding: 9px 14px; font-size: 15px; }
+  .tut-row button.go { background: linear-gradient(180deg, #e0a458, #c8873a); color: #1d1408; border: none; font-weight: 700; }
+  .tut-row .skip { background: none; border: none; color: var(--dim); }
+  body.touring header, body.touring nav { position: relative; z-index: 31; }
+  nav button.tut-glow { border-color: var(--accent); color: var(--accent); box-shadow: 0 0 0 3px rgba(224,164,88,.45); animation: pulse 1.4s infinite; }
+  body.display header .me, body.display nav { display: none; }
+  body.display main { display: grid; grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); gap: 16px; max-width: none; }
+  body.display .pane { display: none; } body.display #turns, body.display #map.has-map { display: block; }
+  body.display #map.has-map .mapwrap { height: calc(100vh - 90px); }
+  body.display #map:not(.has-map) + * { grid-column: 1 / -1; }
+
+  body.display .c { padding: 18px 22px; } body.display .c .n { font-size: 28px; } body.display .round { font-size: 26px; }
+</style>
+</head>
+<body>
+<header><span class="status" id="status" title="Connection"></span><h1><img src="/icon.png" alt="" style="width:24px;height:24px;vertical-align:-5px;margin-right:6px">Dungeons Desk</h1><button class="me" id="me"></button></header>
+<div id="join" class="join" hidden>
+  <h2>Who are you playing?</h2>
+  <p style="color:var(--dim)">Pick your character so the DM can send you handouts.</p>
+  <div class="pcs" id="pcs"></div>
+  <div class="or">or type your name</div>
+  <input id="nameIn" placeholder="Character name" autocomplete="off">
+  <button class="go" id="goBtn">Join</button>
+</div>
+<div id="app" hidden>
+  <div class="date" id="date"></div>
+  <nav><button data-tab="turns" class="on">⏳ Turns</button><button data-tab="handouts">✉ Handouts <span class="badge" id="badge" hidden></span></button><button data-tab="wiki">📚 Wiki</button><button data-tab="map">🗺 Map <span class="badge" id="mapbadge" hidden>!</span></button><button data-tab="char">👤 Me</button></nav>
+  <main>
+    <section class="pane" id="map"></section>
+    <section class="pane on" id="turns"></section>
+    <section class="pane" id="handouts"></section>
+    <section class="pane" id="wiki"></section>
+    <section class="pane" id="char"></section>
+  </main>
+</div>
+<script src="/shared/handout.js"></script>
+<script src="/shared/map-render.js"></script>
+<link rel="stylesheet" href="/shared/statblock.css">
+<script>
+(() => {
+  const $ = (s) => document.querySelector(s);
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const params = new URLSearchParams(location.search);
+  const display = params.get('display') === '1';
+  const store = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
+  if (params.get('player')) store.set('dm.player', params.get('player'));
+  let me = display ? null : store.get('dm.player');
+  let es = null, data = null, lastCurrent = null;
+  let seen = new Set(JSON.parse(store.get('dm.seen') || '[]'));
+  let firstLoad = true;
+  const known = new Set(); // handouts this page has already been told about
+
+  if (display) document.body.classList.add('display');
+  // Phones only allow vibration after the player has tapped the page at least once.
+  let tapped = false;
+  document.addEventListener('pointerdown', () => { tapped = true; }, { once: true });
+  const buzz = (p) => { if (tapped && navigator.vibrate) navigator.vibrate(p); };
+
+  function connect() {
+    if (es) es.close();
+    firstLoad = true;
+    const q = display ? '?display=1' : (me ? '?player=' + encodeURIComponent(me) : '');
+    es = new EventSource('/events' + q);
+    es.onopen = () => $('#status').classList.add('ok');
+    es.onerror = () => $('#status').classList.remove('ok');
+    es.onmessage = (e) => { data = JSON.parse(e.data); render(); };
+  }
+
+  function showJoin() {
+    $('#join').hidden = false; $('#app').hidden = true; $('#me').hidden = true;
+    const party = (data && data.party) || [];
+    $('#pcs').innerHTML = party.map(n => `<button data-name="${esc(n)}">${esc(n)}</button>`).join('') || '<p style="color:var(--dim)">The DM hasn\'t added the party yet.</p>';
+  }
+  function join(name) {
+    name = (name || '').trim(); if (!name) return;
+    me = name; store.set('dm.player', me); notesLoaded = false; maybeTour(); const ta = document.querySelector('#char .mynotes'); if (ta) ta.value = '';
+    $('#join').hidden = true; $('#app').hidden = false; $('#me').hidden = false;
+    connect();
+  }
+  $('#pcs').addEventListener('click', (e) => { const b = e.target.closest('button[data-name]'); if (b) join(b.dataset.name); });
+  $('#goBtn').addEventListener('click', () => join($('#nameIn').value));
+  $('#nameIn').addEventListener('keydown', (e) => { if (e.key === 'Enter') join(e.target.value); });
+  $('#me').addEventListener('click', () => { if (confirm('Switch character?')) { me = null; store.set('dm.player', ''); connect(); showJoin(); } });
+  document.querySelectorAll('nav button').forEach(b => b.addEventListener('click', () => tab(b.dataset.tab)));
+  let currentTab = 'turns';
+  function tab(t) {
+    currentTab = t;
+    document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
+    document.querySelectorAll('.pane').forEach(p => p.classList.toggle('on', p.id === t));
+    if (t === 'map') { $('#mapbadge').hidden = true; requestAnimationFrame(() => fitMap(true)); }
+    if (t === 'char') loadNotes();
+  }
+
+  function render() {
+    if (!display && !me) { showJoin(); return; }
+    $('#app').hidden = false; $('#join').hidden = true;
+    $('#me').hidden = display; $('#me').textContent = '👤 ' + (me || '');
+    $('#date').textContent = data.calendar ? '🗓 ' + data.calendar : '';
+    renderTurns(); renderHandouts(); renderWiki(); renderMap(); renderMe();
+  }
+
+  // ---------- Wiki ----------
+  let wikiOpen = null, wikiQuery = '';
+  function renderWiki() {
+    const el = $('#wiki'), list = data.wiki || [];
+    const art = wikiOpen && list.find(w => w.id === wikiOpen);
+    if (art) {
+      el.innerHTML = `<button class="wback">← All pages</button><div class="article"><h1>${esc(art.title)}</h1>${art.html}</div>`;
+      el.querySelector('.wback').addEventListener('click', () => { wikiOpen = null; renderWiki(); });
+      el.querySelectorAll('a.wikilink[data-wiki]').forEach(a => a.addEventListener('click', () => { wikiOpen = a.dataset.wiki; renderWiki(); window.scrollTo(0, 0); }));
+      // The note already has its own "# Title" heading; avoid showing it twice.
+      const hs = el.querySelectorAll('.article h1'); if (hs.length > 1 && hs[1].textContent.trim() === art.title) hs[0].remove();
+      return;
+    }
+    if (!list.length) { el.innerHTML = '<div class="empty"><div class="big">📚</div>The DM hasn\'t shared any pages yet.</div>'; return; }
+    const q = wikiQuery.toLowerCase();
+    const hits = list.filter(w => !q || w.title.toLowerCase().includes(q) || w.html.toLowerCase().includes(q));
+    const groups = {};
+    hits.forEach(w => (groups[w.type] = groups[w.type] || []).push(w));
+    const names = { npc: 'People', character: 'The Party', location: 'Places', lore: 'Lore & History', faction: 'Factions', session: 'Session Recaps', monster: 'Creatures', encounter: 'Encounters', campaign: 'Campaign' };
+    el.innerHTML = `<input class="wsearch" placeholder="Search the wiki…" value="${esc(wikiQuery)}">` +
+      Object.entries(groups).map(([t, ws]) => `<div class="wgroup">${esc(names[t] || t)}</div>` + ws.sort((a, b) => a.title.localeCompare(b.title)).map(w => `<div class="witem" data-id="${esc(w.id)}">${esc(w.title)}</div>`).join('')).join('');
+    const input = el.querySelector('.wsearch');
+    input.addEventListener('input', () => { wikiQuery = input.value; const pos = input.selectionStart; renderWiki(); const i2 = $('#wiki .wsearch'); i2.focus(); i2.setSelectionRange(pos, pos); });
+    el.querySelectorAll('.witem').forEach(d => d.addEventListener('click', () => { wikiOpen = d.dataset.id; renderWiki(); window.scrollTo(0, 0); }));
+  }
+
+  // ---------- Map ----------
+  let mapView = null, mapImg = null, mapImgUrl = null, tokenImgs = {}, lastMapId = null, pointers = new Map(), pinch = null;
+  function renderMap() {
+    const el = $('#map'), m = data.map;
+    el.classList.toggle('has-map', !!m);
+    if (!m) { el.innerHTML = '<div class="empty"><div class="big">🗺</div>No map is being shown right now.</div>'; lastMapId = null; return; }
+    if (!el.querySelector('canvas')) {
+      el.innerHTML = '<div class="mapwrap"><canvas></canvas><div class="mapname"></div><div class="maphint" hidden></div><div class="mapbtns"><button data-z="1.25">＋</button><button data-z="0.8">－</button><button data-z="fit">⤢</button></div>' +
+        (display ? '' : '<div class="maptools"><button data-t="move" class="on">✋ Move</button><button data-t="measure">📏 Measure</button><button data-t="ping">📍 Ping</button></div>') + '</div>';
+      el.querySelectorAll('.mapbtns button').forEach(b => b.addEventListener('click', () => { if (b.dataset.z === 'fit') fitMap(true); else zoomAt(Number(b.dataset.z)); }));
+      el.querySelectorAll('.maptools button').forEach(b => b.addEventListener('click', () => { mapTool = b.dataset.t; el.querySelectorAll('.maptools button').forEach(x => x.classList.toggle('on', x === b)); hint({ move: myTokens().length ? 'Drag your token to move it' : 'Drag to look around', measure: 'Drag to measure', ping: 'Tap to ping' }[mapTool]); }));
+      bindMap(el.querySelector('canvas'));
+    }
+    el.querySelector('.mapname').textContent = m.name;
+    if (m.image !== mapImgUrl) { mapImgUrl = m.image; mapImg = new Image(); mapImg.onload = drawMap; mapImg.src = m.image; }
+    (m.tokens || []).forEach(t => { if (t.img && !tokenImgs[t.img]) { const i = new Image(); i.onload = drawMap; i.src = t.img; tokenImgs[t.img] = i; } });
+    if (m.id !== lastMapId) { lastMapId = m.id; mapView = null; if (currentTab !== 'map' && !display) $('#mapbadge').hidden = false; }
+    fitMap(false);
+  }
+  function fitMap(reset) {
+    const c = document.querySelector('#map canvas'), m = data && data.map;
+    if (!c || !m) return;
+    const r = c.getBoundingClientRect();
+    if (!r.width) return;
+    c.width = r.width * devicePixelRatio; c.height = r.height * devicePixelRatio;
+    if (reset || !mapView) { const s = Math.min(r.width / m.w, r.height / m.h); mapView = { s, x: (r.width - m.w * s) / 2, y: (r.height - m.h * s) / 2 }; }
+    drawMap();
+  }
+  function zoomAt(k, cx, cy) {
+    const c = document.querySelector('#map canvas'); if (!c || !mapView) return;
+    const r = c.getBoundingClientRect(); cx = cx ?? r.width / 2; cy = cy ?? r.height / 2;
+    mapView.x = cx - (cx - mapView.x) * k; mapView.y = cy - (cy - mapView.y) * k; mapView.s *= k; drawMap();
+  }
+  function drawMap() {
+    const c = document.querySelector('#map canvas'), m = data && data.map;
+    if (!c || !m || !mapView) return;
+    const ctx = c.getContext('2d'), d = devicePixelRatio;
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = '#0d0b12'; ctx.fillRect(0, 0, c.width, c.height);
+    ctx.setTransform(mapView.s * d, 0, 0, mapView.s * d, mapView.x * d, mapView.y * d);
+    const now = Date.now();
+    const pings = (m.pings || []).map(pg => { const k = pg.x + ',' + pg.y + ',' + pg.t; if (!pingSeen.has(k)) pingSeen.set(k, now); return { ...pg, seen: pingSeen.get(k) }; });
+    const tokens = (m.tokens || []).map(t => movingTok && movingTok.id === t.id ? { ...t, x: movingTok.x, y: movingTok.y } : t);
+    MapRender.draw(ctx, { ...m, tokens, pings, rulers: [...(m.rulers || []), ...(myRuler ? [myRuler] : [])] }, { image: mapImg, tokenImages: tokenImgs, fogAlpha: 1, highlight: m.current, scale: mapView.s });
+  }
+  // ---------- Map tools on the phone ----------
+  let mapTool = 'move', movingTok = null, myRuler = null;
+  const pingSeen = new Map();
+  const myTokens = () => ((data && data.map && data.map.tokens) || []).filter(t => me && t.owner && t.owner.toLowerCase() === me.toLowerCase());
+  function hint(text) { const el = document.querySelector('#map .maphint'); if (!el) return; el.textContent = text; el.hidden = !text; clearTimeout(hint.t); hint.t = setTimeout(() => (el.hidden = true), 2500); }
+  function toMapPoint(c, cx, cy) { const r = c.getBoundingClientRect(); return { x: (cx - r.left - mapView.x) / mapView.s, y: (cy - r.top - mapView.y) / mapView.s }; }
+  function post(path, body) { return fetch(path + '?player=' + encodeURIComponent(me), { method: 'POST', body: JSON.stringify(body) }).catch(() => {}); }
+  setInterval(() => { if (data && data.map && (data.map.pings || []).length) drawMap(); }, 60);
+  setInterval(() => { if (data && data.map && data.map.ping && Date.now() - data.map.ping.t < 4200) drawMap(); }, 50);
+  window.addEventListener('resize', () => fitMap(false));
+  function bindMap(c) {
+    c.addEventListener('pointerdown', (e) => {
+      c.setPointerCapture(e.pointerId); pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      const m = data && data.map; if (!m || !mapView || pointers.size > 1 || display) { movingTok = null; myRuler = null; return; }
+      const p = toMapPoint(c, e.clientX, e.clientY);
+      if (mapTool === 'ping') { post('/api/ping', { map: m.id, x: p.x, y: p.y }); buzz(30); return; }
+      if (mapTool === 'measure') { myRuler = { x: p.x, y: p.y, x2: p.x, y2: p.y, color: '#40c4ff' }; return; }
+      const g = (m.grid && m.grid.size) || 50;
+      const tk = m.playerMove && myTokens().find(t => Math.hypot(t.x - p.x, t.y - p.y) < (t.size || 1) * g / 2 + 10 / mapView.s);
+      if (tk) movingTok = { id: tk.id, x: tk.x, y: tk.y, dx: p.x - tk.x, dy: p.y - tk.y, size: tk.size || 1 };
+    });
+    c.addEventListener('pointermove', (e) => {
+      if (!pointers.has(e.pointerId) || !mapView) return;
+      const prev = pointers.get(e.pointerId); pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pointers.size === 1 && (movingTok || myRuler)) {
+        const p = toMapPoint(c, e.clientX, e.clientY);
+        if (movingTok) { movingTok.x = p.x - movingTok.dx; movingTok.y = p.y - movingTok.dy; } else { myRuler.x2 = p.x; myRuler.y2 = p.y; }
+        drawMap(); return;
+      }
+      if (pointers.size === 1 && mapTool !== 'ping') { mapView.x += e.clientX - prev.x; mapView.y += e.clientY - prev.y; drawMap(); }
+      else if (pointers.size === 2) {
+        const [a, b] = [...pointers.values()], dist = Math.hypot(a.x - b.x, a.y - b.y), r = c.getBoundingClientRect();
+        if (pinch) zoomAt(dist / pinch, (a.x + b.x) / 2 - r.left, (a.y + b.y) / 2 - r.top);
+        pinch = dist;
+      }
+    });
+    const up = (e) => {
+      pointers.delete(e.pointerId); if (pointers.size < 2) pinch = null;
+      const m = data && data.map;
+      if (movingTok && m) {
+        // Snap to the grid like the DM's screen does, then ask the DM app to move it.
+        const g = m.grid || { size: 50, ox: 0, oy: 0 }, n = movingTok.size;
+        const x = (g.ox || 0) + (Math.round((movingTok.x - (g.ox || 0)) / g.size - n / 2) + n / 2) * g.size;
+        const y = (g.oy || 0) + (Math.round((movingTok.y - (g.oy || 0)) / g.size - n / 2) + n / 2) * g.size;
+        const t = m.tokens.find(t => t.id === movingTok.id); if (t) { t.x = x; t.y = y; }
+        post('/api/move', { map: m.id, token: movingTok.id, x, y });
+        movingTok = null; drawMap();
+      }
+      if (myRuler) { const r = myRuler; setTimeout(() => { if (myRuler === r) { myRuler = null; drawMap(); } }, 2000); }
+    };
+    c.addEventListener('pointerup', up); c.addEventListener('pointercancel', up);
+    c.addEventListener('wheel', (e) => { e.preventDefault(); const r = c.getBoundingClientRect(); zoomAt(e.deltaY < 0 ? 1.12 : 1 / 1.12, e.clientX - r.left, e.clientY - r.top); }, { passive: false });
+  }
+
+  // ---------- Me: character card + private notes ----------
+  let notesLoaded = false, notesTimer = null;
+  function renderMe() {
+    const el = $('#char');
+    if (!el.querySelector('.mynotes')) {
+      el.innerHTML = '<div id="pccard"></div><div class="card" id="tokcard"></div><div class="card"><div style="display:flex;justify-content:space-between;align-items:center"><b>📝 My notes</b><span class="saved" id="saved"></span></div><p style="color:var(--dim);font-size:13px;margin:4px 0 8px">Only you see these. They\'re saved on the DM\'s computer so they\'re here next session.</p><textarea class="mynotes" placeholder="Names, clues, loot, things to remember…"></textarea></div><button class="btn" id="replaytour" style="width:100%;margin-bottom:16px">❓ Show the tour again</button>';
+      el.querySelector('#replaytour').addEventListener('click', startTour);
+      el.querySelector('.mynotes').addEventListener('input', (e) => {
+        $('#saved').textContent = 'Saving…';
+        clearTimeout(notesTimer);
+        notesTimer = setTimeout(() => fetch('/api/notes?player=' + encodeURIComponent(me), { method: 'POST', body: e.target.value })
+          .then(() => { $('#saved').textContent = 'Saved'; }).catch(() => { $('#saved').textContent = 'Not saved — reconnecting'; }), 700);
+      });
+    }
+    drawTokenCard();
+    const c = data.card, box = $('#pccard');
+    if (!c) { box.innerHTML = `<div class="card"><div class="pcname">${esc(me || '')}</div><p style="color:var(--dim)">Ask the DM to add your character to the party to see your stats here.</p></div>`; return; }
+    const pct = c.maxHp ? Math.max(0, Math.min(1, c.hp / c.maxHp)) : null;
+    box.innerHTML = `<div class="card"><div class="pcname">${esc(c.name)}</div><div style="color:var(--dim)">${esc([c.cls, c.level ? 'Level ' + c.level : ''].filter(Boolean).join(' · '))}${c.inCombat ? ' · ⚔ In combat' : ''}</div>
+      <div class="stats"><div class="stat"><b>${esc(c.ac ?? '—')}</b><span>Armor Class</span></div><div class="stat"><b>${esc(c.hp ?? '—')}${c.maxHp ? `<small style="font-size:14px;color:var(--dim)"> / ${esc(c.maxHp)}</small>` : ''}</b><span>Hit Points</span></div></div>
+      ${pct != null ? `<div class="hpbar"><i style="width:${pct * 100}%;background:${pct > .5 ? '#4caf50' : pct > .25 ? '#e0a030' : '#d9443a'}"></i></div>` : ''}
+      ${c.conditions && c.conditions.length ? `<div class="conds" style="margin-top:10px">${c.conditions.map(x => `<span class="cond">${esc(x)}</span>`).join('')}</div>` : ''}
+      ${c.deathSaves ? `<div class="ds"><b>Death saves</b><span>${[0, 1, 2].map(k => `<i class="pip ok${k < c.deathSaves.s ? ' on' : ''}"></i>`).join('')}</span><span>${[0, 1, 2].map(k => `<i class="pip bad${k < c.deathSaves.f ? ' on' : ''}"></i>`).join('')}</span></div>` : ''}</div>`;
+  }
+  // ---------- My token: pick a photo, frame it in a circle, send it to the DM ----------
+  let tok = { img: null, zoom: 1, ox: 0, oy: 0, ring: '#d4a64a' }, tokDirty = false;
+  const RINGS = ['#d4a64a', '#c0c4cc', '#b06a3b', '#1e5b8b', '#8b1e1e', '#2b7a3d', '#6b2b8b', '#111111'];
+  function drawTokenCard() {
+    const box = document.querySelector('#tokcard');
+    if (!box || box.dataset.ready) { paintToken(); return; }
+    box.dataset.ready = '1';
+    box.innerHTML = `<b>🪙 My token</b><p style="color:var(--dim);font-size:13px;margin:4px 0 10px">Pick a picture for your character. When the DM puts you on the map, this is the token they'll use.</p>
+      <div class="tokmaker"><canvas width="256" height="256"></canvas><div class="ctl">
+        <input type="file" accept="image/*" hidden><button class="btn" data-a="pick">🖼 Choose picture</button>
+        <label style="font-size:12px;color:var(--dim)">Zoom<input type="range" min="0.5" max="4" step="0.01" value="1"></label>
+        <div class="rings">${RINGS.map(c => `<button style="background:${c}" data-ring="${c}"></button>`).join('')}</div>
+        <button class="btn primary" data-a="send" disabled>Use this token</button><span class="saved" id="toksaved"></span></div></div>`;
+    const cv = box.querySelector('canvas'), file = box.querySelector('input[type=file]'), zoom = box.querySelector('input[type=range]');
+    box.querySelector('[data-a=pick]').addEventListener('click', () => file.click());
+    file.addEventListener('change', () => {
+      const f = file.files[0]; if (!f) return;
+      const r = new FileReader();
+      r.onload = () => { const i = new Image(); i.onload = () => { tok.img = i; tok.zoom = 1; tok.ox = tok.oy = 0; zoom.value = 1; tokDirty = true; paintToken(); box.querySelector('[data-a=send]').disabled = false; }; i.src = r.result; };
+      r.readAsDataURL(f);
+    });
+    zoom.addEventListener('input', () => { tok.zoom = Number(zoom.value); paintToken(); });
+    box.querySelectorAll('[data-ring]').forEach(b => b.addEventListener('click', () => { tok.ring = b.dataset.ring; tokDirty = true; paintToken(); }));
+    let last = null;
+    cv.addEventListener('pointerdown', (e) => { cv.setPointerCapture(e.pointerId); last = { x: e.clientX, y: e.clientY }; });
+    cv.addEventListener('pointermove', (e) => { if (!last || !tok.img) return; const k = 256 / cv.clientWidth; tok.ox += (e.clientX - last.x) * k; tok.oy += (e.clientY - last.y) * k; last = { x: e.clientX, y: e.clientY }; paintToken(); });
+    cv.addEventListener('pointerup', () => (last = null));
+    box.querySelector('[data-a=send]').addEventListener('click', () => {
+      $('#toksaved').textContent = 'Sending…';
+      fetch('/api/token?player=' + encodeURIComponent(me), { method: 'POST', body: JSON.stringify({ dataUrl: cv.toDataURL('image/png') }) })
+        .then(r => { $('#toksaved').textContent = r.ok ? 'Sent to the DM ✓' : 'That picture didn\'t work, try another'; tokDirty = false; })
+        .catch(() => { $('#toksaved').textContent = 'Not sent — reconnecting'; });
+    });
+    paintToken();
+  }
+  function paintToken() {
+    const cv = document.querySelector('#tokcard canvas'); if (!cv) return;
+    const x = cv.getContext('2d'), S = 256, R = S / 2 - 4, bw = 16;
+    x.clearRect(0, 0, S, S);
+    // Show the token the DM already has until the player picks a new picture.
+    if (!tok.img && data.card && data.card.token) {
+      if (!tok.current || tok.current.src.indexOf(data.card.token) < 0) { tok.current = new Image(); tok.current.onload = paintToken; tok.current.src = data.card.token; }
+      if (tok.current.complete && tok.current.naturalWidth) x.drawImage(tok.current, 0, 0, S, S);
+      return;
+    }
+    x.save(); x.beginPath(); x.arc(S / 2, S / 2, R - bw / 2, 0, Math.PI * 2); x.clip();
+    if (tok.img) { const b = Math.max(S / tok.img.width, S / tok.img.height) * tok.zoom, w = tok.img.width * b, hh = tok.img.height * b; x.drawImage(tok.img, S / 2 - w / 2 + tok.ox, S / 2 - hh / 2 + tok.oy, w, hh); }
+    else { x.fillStyle = '#3a3346'; x.fillRect(0, 0, S, S); x.fillStyle = '#fff'; x.font = 'bold 90px serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText((me || '?').slice(0, 1).toUpperCase(), S / 2, S / 2); }
+    x.restore();
+    x.lineWidth = bw; x.strokeStyle = tok.ring; x.beginPath(); x.arc(S / 2, S / 2, R - bw / 2, 0, Math.PI * 2); x.stroke();
+    x.lineWidth = 2; x.strokeStyle = 'rgba(0,0,0,.5)'; x.beginPath(); x.arc(S / 2, S / 2, R - bw, 0, Math.PI * 2); x.stroke();
+  }
+
+  function loadNotes() {
+    if (notesLoaded || !me) return;
+    fetch('/api/notes?player=' + encodeURIComponent(me)).then(r => r.text()).then(t => { const ta = document.querySelector('#char .mynotes'); if (ta && !ta.value) ta.value = t; notesLoaded = true; }).catch(() => {});
+  }
+
+  function renderTurns() {
+    const ini = data.initiative, el = $('#turns');
+    if (!ini || !ini.list.length) { el.innerHTML = '<div class="empty"><div class="big">🕯</div>No combat right now.<br>The turn order will appear here.</div>'; lastCurrent = null; return; }
+    const meL = (me || '').toLowerCase();
+    const idx = ini.list.findIndex(c => c.id === ini.current);
+    const alive = ini.list.filter(c => !c.defeated);
+    const cur = ini.list[idx];
+    let next = null;
+    if (idx >= 0) for (let i = 1; i <= ini.list.length; i++) { const c = ini.list[(idx + i) % ini.list.length]; if (!c.defeated) { next = c; break; } }
+    const mine = (c) => c && meL && c.name.toLowerCase() === meL;
+    let banner = '';
+    if (mine(cur)) banner = '<div class="banner turn">⚔ It\'s your turn!</div>';
+    else if (mine(next)) banner = '<div class="banner deck">You\'re up next — get ready!</div>';
+    if (mine(cur) && lastCurrent !== cur.id) buzz([250, 120, 250]);
+    lastCurrent = cur ? cur.id : null;
+    el.innerHTML = `<div class="round">Round <b>${ini.round}</b></div>${banner}` + ini.list.map(c => `
+      <div class="c k-${c.kind}${c.id === ini.current ? ' cur' : ''}${c.defeated ? ' down' : ''}${mine(c) ? ' me' : ''}">
+        <span class="arrow">${c.id === ini.current ? '▶' : ''}</span>
+        <div style="flex:1;min-width:0"><div class="n">${esc(c.name)}</div>${c.conditions.length ? `<div class="conds">${c.conditions.map(x => `<span class="cond">${esc(x)}</span>`).join('')}</div>` : ''}${c.deathSaves ? `<div class="ds" style="font-size:12px">Dying ${[0, 1, 2].map(k => `<i class="pip ok${k < c.deathSaves.s ? ' on' : ''}"></i>`).join('')} ${[0, 1, 2].map(k => `<i class="pip bad${k < c.deathSaves.f ? ' on' : ''}"></i>`).join('')}</div>` : ''}</div>
+        <span class="s ${esc(c.status || '')}">${esc(c.status || '')}</span>
+      </div>`).join('');
+  }
+
+  function renderHandouts() {
+    const list = [...(data.handouts || [])].sort((a, b) => (b.revealedAt || 0) - (a.revealedAt || 0));
+    const el = $('#handouts');
+    const unseen = list.filter(h => !seen.has(h.id + ':' + h.revealedAt));
+    $('#badge').hidden = !unseen.length; $('#badge').textContent = unseen.length;
+    el.innerHTML = list.length ? list.map(h => `<div class="ho-card" data-id="${esc(h.id)}"><span style="font-size:24px">✉</span>
+        <div class="t">${esc(h.title || 'Untitled')}<div class="when">${h.to === 'all' ? 'To the party' : 'Just for you'}</div></div>
+        ${seen.has(h.id + ':' + h.revealedAt) ? '' : '<span class="new">NEW</span>'}</div>`).join('')
+      : '<div class="empty"><div class="big">📜</div>No handouts yet.</div>';
+    el.querySelectorAll('.ho-card').forEach(c => c.addEventListener('click', () => openHandout(list.find(h => h.id === c.dataset.id))));
+    // Pop open handouts that are revealed while the page is open (not ones that were already there).
+    const fresh = list.filter(h => !known.has(h.id + ':' + h.revealedAt) && !seen.has(h.id + ':' + h.revealedAt));
+    list.forEach(h => known.add(h.id + ':' + h.revealedAt));
+    if (!firstLoad && fresh.length && !document.querySelector('.viewer')) { openHandout(fresh[0], true); buzz(150); }
+    firstLoad = false;
+  }
+
+  function openHandout(h, isNew) {
+    if (!h) return;
+    seen.add(h.id + ':' + h.revealedAt); store.set('dm.seen', JSON.stringify([...seen]));
+    const v = document.createElement('div');
+    v.className = 'viewer';
+    v.innerHTML = `${isNew ? '<div class="received">You received a handout!</div>' : ''}<button class="close">Close ✕</button>${renderHandout(h)}`;
+    v.querySelector('.close').addEventListener('click', () => { v.remove(); renderHandouts(); });
+    document.body.append(v);
+  }
+
+  // ---------- First-time tour ----------
+  const TOUR = [
+    { tab: null, icon: '👋', title: () => `Welcome, ${esc(me || 'adventurer')}!`, body: 'This page is your window into the game. Here\'s a quick tour (it takes 30 seconds).' },
+    { tab: 'turns', icon: '⏳', title: () => 'Turn order', body: 'When combat starts, everyone\'s turn order shows up here. <b>Your phone buzzes when it\'s your turn</b>, and you\'ll get a heads-up one turn before.' },
+    { tab: 'handouts', icon: '✉', title: () => 'Handouts', body: 'Letters, clues, wanted posters and secrets from the DM pop up here, and some are just for you. A red badge means something new.' },
+    { tab: 'wiki', icon: '📚', title: () => 'Wiki', body: 'People, places and lore the DM has shared with the party. Tap a highlighted name to jump to that page.' },
+    { tab: 'map', icon: '🗺', title: () => 'Map', body: 'When the DM shows a map:<ul><li><b>✋ Move</b>: drag your own token. Fog clears as you explore.</li><li><b>📏 Measure</b>: drag to measure (1 square = 5 ft).</li><li><b>📍 Ping</b>: tap to point something out.</li></ul>Pinch to zoom, drag to look around.' },
+    { tab: 'char', icon: '👤', title: () => 'You', body: 'Your HP, AC and conditions. <b>Pick a picture for your token</b> here (it\'s what the DM puts on the map), and keep private notes that are saved for next session.' },
+    { tab: 'turns', icon: '🎲', title: () => 'You\'re all set!', body: 'Tip: add this page to your home screen (browser menu → "Add to Home screen") so it\'s one tap away next session. You can replay this tour from the 👤 Me tab.' },
+  ];
+  let tourStep = -1;
+  function startTour() {
+    if (display) return;
+    tourStep = 0; document.body.classList.add('touring'); drawTour();
+  }
+  function endTour() {
+    tourStep = -1; store.set('dm.tour.done', '1');
+    document.body.classList.remove('touring');
+    document.querySelectorAll('.tut-dim, .tut-card').forEach(e => e.remove());
+    document.querySelectorAll('nav button').forEach(b => b.classList.remove('tut-glow'));
+    tab('turns');
+  }
+  function drawTour() {
+    document.querySelectorAll('.tut-dim, .tut-card').forEach(e => e.remove());
+    const st = TOUR[tourStep];
+    if (st.tab) tab(st.tab);
+    document.querySelectorAll('nav button').forEach(b => b.classList.toggle('tut-glow', st.tab && b.dataset.tab === st.tab && tourStep < TOUR.length - 1));
+    const dim = document.createElement('div'); dim.className = 'tut-dim';
+    const card = document.createElement('div'); card.className = 'tut-card';
+    const last = tourStep === TOUR.length - 1;
+    card.innerHTML = `<div class="big">${st.icon}</div><h3>${st.title()}</h3><p>${st.body}</p>
+      <div class="tut-row">${last ? '' : '<button class="skip">Skip</button>'}<div class="tut-dots">${TOUR.map((_, i) => `<i class="${i === tourStep ? 'on' : ''}"></i>`).join('')}</div>
+      ${tourStep ? '<button class="back">Back</button>' : ''}<button class="go">${last ? 'Let\'s play!' : 'Next'}</button></div>`;
+    card.querySelector('.go').addEventListener('click', () => { if (last) endTour(); else { tourStep++; drawTour(); } });
+    card.querySelector('.back')?.addEventListener('click', () => { tourStep--; drawTour(); });
+    card.querySelector('.skip')?.addEventListener('click', endTour);
+    document.body.append(dim, card);
+  }
+  window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && tourStep >= 0) endTour(); });
+  // Show the tour the first time a player joins on this phone.
+  const maybeTour = () => { if (!display && me && !store.get('dm.tour.done') && tourStep < 0) setTimeout(startTour, 600); };
+
+  connect();
+  maybeTour();
+  if (!display && !me) { $('#app').hidden = true; $('#join').hidden = false; }
+})();
+</script>
+</body>
+</html>

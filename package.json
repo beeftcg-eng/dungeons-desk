@@ -1,0 +1,103 @@
+{
+  "name": "dungeons-desk",
+  "version": "1.0.0",
+  "description": "Dungeons Desk: a desktop toolkit for Dungeon Masters",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron . --no-sandbox",
+    "dist": "electron-builder",
+    "dist:linux": "electron-builder --linux",
+    "dist:win": "electron-builder --win",
+    "release": "node scripts/release.js"
+  },
+  "author": {
+    "name": "beeftcg-eng",
+    "email": "beeftcg@gmail.com"
+  },
+  "license": "UNLICENSED",
+  "type": "commonjs",
+  "devDependencies": {
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9",
+    "js-yaml": "^4.3.2",
+    "marked": "^12.0.2",
+    "qrcode": "^1.5.4"
+  },
+  "allowScripts": {
+    "electron@33.4.11": true
+  },
+  "productName": "Dungeons Desk",
+  "homepage": "https://github.com/beeftcg-eng/dungeons-desk",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/beeftcg-eng/dungeons-desk.git"
+  },
+  "build": {
+    "appId": "com.beeftcg.dungeonsdesk",
+    "productName": "Dungeons Desk",
+    "copyright": "Copyright \u00a9 2026 beeftcg-eng",
+    "directories": {
+      "buildResources": "build",
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "server.js",
+      "preload.js",
+      "renderer/**",
+      "player/**",
+      "shared/**",
+      "seed/**",
+      "build/icon*.png",
+      "package.json"
+    ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "beeftcg-eng",
+        "repo": "dungeons-desk",
+        "releaseType": "draft"
+      }
+    ],
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Game",
+      "icon": "build/icon-512.png",
+      "artifactName": "Dungeons-Desk-${version}-linux-${arch}.${ext}",
+      "executableArgs": [
+        "--no-sandbox"
+      ],
+      "desktop": {
+        "Name": "Dungeons Desk",
+        "Comment": "Notes, maps, initiative and more for D&D"
+      }
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Dungeons Desk",
+      "artifactName": "Dungeons-Desk-Setup-${version}.${ext}",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico"
+    }
+  }
+}

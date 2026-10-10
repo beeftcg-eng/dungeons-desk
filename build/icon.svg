@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3a2b52"/>
+      <stop offset="1" stop-color="#151020"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fff1b8"/>
+      <stop offset="0.45" stop-color="#e0a458"/>
+      <stop offset="1" stop-color="#9a6420"/>
+    </linearGradient>
+    <linearGradient id="face" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8e2a1c"/>
+      <stop offset="1" stop-color="#4f120b"/>
+    </linearGradient>
+    <linearGradient id="side" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#6b1d14"/>
+      <stop offset="1" stop-color="#2e0a06"/>
+    </linearGradient>
+  </defs>
+  <rect x="16" y="16" width="480" height="480" rx="104" fill="url(#bg)"/>
+  <rect x="16" y="16" width="480" height="480" rx="104" fill="none" stroke="#e0a458" stroke-opacity=".35" stroke-width="6"/>
+  <!-- d20 -->
+  <polygon points="256,72 415,164 415,348 256,440 97,348 97,164" fill="url(#side)"/>
+  <polygon points="256,152 348,310 164,310" fill="url(#face)"/>
+  <g fill="none" stroke="url(#gold)" stroke-width="11" stroke-linejoin="round" stroke-linecap="round">
+    <polygon points="256,72 415,164 415,348 256,440 97,348 97,164"/>
+    <polygon points="256,152 348,310 164,310"/>
+    <path d="M256 72 L256 152 M97 164 L256 152 L415 164 M415 164 L348 310 L415 348 M348 310 L256 440 L164 310 M164 310 L97 348 M97 164 L164 310"/>
+  </g>
+  <text x="256" y="283" text-anchor="middle" font-family="Georgia, 'DejaVu Serif', serif" font-weight="bold" font-size="76" fill="url(#gold)">20</text>
+</svg>
