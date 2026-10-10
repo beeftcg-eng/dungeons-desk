@@ -1,6 +1,6 @@
 {
   "name": "dungeons-desk",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Dungeons Desk: a desktop toolkit for Dungeon Masters",
   "main": "main.js",
   "scripts": {
