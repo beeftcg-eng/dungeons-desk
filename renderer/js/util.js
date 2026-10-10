@@ -181,12 +181,16 @@ window.publishToPlayers = U.debounce(() => {
     const c = ini.active && ini.combatants.find(x => x.kind === 'pc' && x.name.toLowerCase() === p.name.toLowerCase());
     const tokenFile = p.token || (s.playerTokens || {})[p.name.toLowerCase()];
     return { name: p.name, token: tokenFile ? '/media/' + encodeURIComponent(tokenFile) : null, cls: p.cls || '', level: p.level || '', ac: c && c.ac != null ? c.ac : p.ac, maxHp: c && c.maxHp != null ? c.maxHp : p.hp,
-      hp: c && c.hp != null ? c.hp : (p.hp || null), conditions: c ? condNames(c) : [], deathSaves: c && c.hp === 0 ? (c.deathSaves || { s: 0, f: 0 }) : null, inCombat: !!c };
+      hp: c && c.hp != null ? c.hp : (p.hp || null), conditions: c ? condNames(c) : [], deathSaves: c && c.hp === 0 ? (c.deathSaves || { s: 0, f: 0 }) : null, inCombat: !!c,
+      // The full character sheet (shared/charsheet.js); the player edits it on their phone.
+      model: { name: p.name, cls: p.cls || '', level: p.level, ac: p.ac, hp: p.hp, initBonus: p.initBonus, sheet: p.sheet || null } };
   });
   window.dm.server.publish({
     initiative, handouts, party: s.party.map(p => p.name).filter(Boolean), partyCards,
     map: window.Maps ? Maps.playerView() : null,
     calendar: window.Timeline ? Timeline.playerDate() : null,
+    feed: window.Sheets ? Sheets.playerFeed() : [],
     ...(window.Notes ? Notes.playerWiki() : {}),
   });
+  if (window.Sheets) Sheets.refreshOpen();
 }, 150);

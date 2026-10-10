@@ -13,7 +13,14 @@ window.Settings = (() => {
     const row = (p, i) => h('tr',
       ['name', 'player', 'cls', 'level', 'initBonus', 'ac', 'hp'].map(k => h('td', h('input', { value: p[k] ?? '', type: ['level', 'initBonus', 'ac', 'hp'].includes(k) ? 'number' : 'text',
         placeholder: { name: 'Character', player: 'Player', cls: 'Class', level: 'Lvl', initBonus: '+0', ac: 'AC', hp: 'Max HP' }[k],
-        onchange: (e) => { p[k] = e.target.value; Store.save(); publishToPlayers(); } }))),
+        onchange: (e) => {
+          p[k] = e.target.value;
+          // Typing a number here switches that number off "Auto" on the character sheet.
+          const auto = { ac: 'ac', hp: 'hp', initBonus: 'init' }[k];
+          if (auto && p.sheet && p.sheet.auto) p.sheet.auto[auto] = false;
+          Store.save(); publishToPlayers();
+        } }))),
+      h('td', h('button.sheet-btn', { title: 'Character sheet', onclick: () => Sheets.open(p) }, '📜')),
       h('td', h('button.tok-pick', { title: 'Token (players can also set their own from their phone)', onclick: () => pickToken(p) },
         p.token ? h('img', { src: App.mediaUrl(p.token) }) : '🪙')),
       h('td', h('button.icon', { title: 'Remove', onclick: () => { party.splice(i, 1); Store.save(); publishToPlayers(); draw(); } }, '✕')));
@@ -43,7 +50,7 @@ window.Settings = (() => {
         h('div.card',
           h('h3', '🛡 Party'),
           h('p.dim', 'Players pick their character name on their phone. These are also used by “Add the party” in the initiative tracker and when sending handouts to individual players.'),
-          h('table.party-table', h('thead', h('tr', ['Character', 'Player', 'Class', 'Level', 'Init', 'AC', 'Max HP', 'Token', ''].map(t => h('th', t)))), h('tbody', party.map(row))),
+          h('table.party-table', h('thead', h('tr', ['Character', 'Player', 'Class', 'Level', 'Init', 'AC', 'Max HP', 'Sheet', 'Token', ''].map(t => h('th', t)))), h('tbody', party.map(row))),
           h('button', { onclick: () => { party.push({ name: '', player: '', cls: '', level: 1, initBonus: 0, ac: '', hp: '' }); Store.save(); draw(); } }, '+ Add character')),
         h('div.card',
           h('h3', '🗺 Campaign'),
@@ -121,5 +128,8 @@ window.Settings = (() => {
     return card;
   }
 
-  return { mount };
+  // Redraw after a player edits their sheet, unless the DM is typing in Settings right now.
+  const refresh = () => { if (root && !root.contains(document.activeElement)) draw(); };
+
+  return { mount, refresh };
 })();

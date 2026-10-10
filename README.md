@@ -69,9 +69,11 @@ Backups: a full copy of each campaign is saved once a day in `~/Documents/Dungeo
 
 ## Players' phones
 
-The **Initiative** page shows a QR code and an address like `http://192.168.0.4:7777`. Players on the same Wi-Fi open it and pick their character. They get five tabs: the live turn order (their phone buzzes when it's their turn), handouts, a **Wiki** of the notes you've shared, the **Map**, and **Me**, which shows their character's HP, AC, conditions and death saves, a **token maker** (they pick a photo and frame it; it becomes their token on your map), and a private notes page that's saved on your computer. On the Map tab players can **drag their own token**, **measure** and **ping**. **Open player display window** gives a big-screen view for a TV.
+The **Initiative** page shows a QR code and an address like `http://192.168.0.4:7777`. Players on the same Wi-Fi open it and pick their character. They get five tabs: the live turn order (their phone buzzes when it's their turn), handouts, a **Wiki** of the notes you've shared, the **Map**, and **Me**, which holds their **character sheet**, a **token maker** (they pick a photo and frame it; it becomes their token on your map), and a private notes page that's saved on your computer. On the Map tab players can **drag their own token**, **measure** and **ping**.
 
-Phones can only view things, apart from each player's own notes page, moving the tokens you've assigned to them, pinging, and uploading their own token. They can't change anything in your game. DM secret boxes, hidden monsters and hidden map tokens are never sent to phones.
+**Character sheets:** players pick a class, level, species and background, and the sheet fills in proficiency, saves, skills, HP, AC, attacks, spell slots, resources and features from the 2024 SRD. Every number can also be typed by hand. They can add gear from a searchable list (or take their starting equipment), track spells, slots, resources and rests, and tap any save, skill, attack or spell to roll it. Your app does the roll, and the result shows in your 📣 player feed and on their phone. **📤 Show the DM** sends you a spell, feature or item. You can open any character's sheet from **⚙ Settings → Party → 📜**. **Open player display window** gives a big-screen view for a TV.
+
+Phones can only view things, apart from each player's own character sheet and notes page, sending you rolls, moving the tokens you've assigned to them, pinging, and uploading their own token. They can't change anything in your game. DM secret boxes, hidden monsters and hidden map tokens are never sent to phones.
 
 ## Files
 

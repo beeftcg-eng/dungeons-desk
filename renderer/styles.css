@@ -517,3 +517,23 @@ td .src { margin-left: 8px; }
 .theme-card.on { border-color: var(--accent); }
 .theme-card .sw { display: flex; height: 34px; } .theme-card .sw i { flex: 1; }
 .theme-card span { display: block; padding: 5px 8px; font-size: 12.5px; }
+
+/* Player feed (renderer/js/sheets.js): rolls and cards players send from their character sheets. */
+.feed-fab { position: fixed; right: 80px; bottom: 18px; width: 52px; height: 52px; border-radius: 50%; font-size: 22px; padding: 0; z-index: 40; background: var(--panel2); border: 1px solid var(--line); box-shadow: 0 6px 18px rgba(0,0,0,.5); }
+.feed-badge { position: absolute; top: -4px; right: -4px; background: var(--red); color: #fff; font-size: 12px; border-radius: 10px; padding: 1px 7px; }
+.feed-stack { position: fixed; top: 14px; right: 18px; width: 320px; display: flex; flex-direction: column; gap: 8px; z-index: 85; pointer-events: none; }
+.feed-card { pointer-events: auto; position: relative; background: var(--panel2); border: 1px solid var(--accent); border-radius: 12px; padding: 10px 34px 10px 14px; box-shadow: 0 10px 30px rgba(0,0,0,.5); transition: opacity .4s; cursor: pointer; }
+.feed-card.is-card { border-color: var(--line); }
+.feed-card.pinned { border-width: 2px; }
+.feed-card.out { opacity: 0; }
+.feed-x { position: absolute; top: 6px; right: 6px; padding: 2px 7px; background: none; border: none; color: var(--dim); }
+.feed-panel { position: fixed; right: 18px; bottom: 80px; width: 360px; max-height: 70vh; display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; z-index: 41; box-shadow: 0 14px 40px rgba(0,0,0,.6); }
+.feed-panel h3 { margin: 0; }
+.feed-list { overflow-y: auto; display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.feed-row { display: flex; gap: 8px; align-items: flex-start; border-top: 1px solid var(--line); padding-top: 8px; }
+.feed-row > div { flex: 1; min-width: 0; }
+.feed-row .cs-feed-total { font-size: 24px; }
+.modal.sheet-modal { width: min(820px, 96vw); }
+.modal.sheet-modal .modal-body { background: var(--bg); }
+.sheet-btn { padding: 4px 9px; }
+:root[data-mode=light] .cs-chip.cs-cond { background: #ead9f7; color: #4a2370; }

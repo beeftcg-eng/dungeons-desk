@@ -33,7 +33,7 @@ window.Initiative = (() => {
     Store.get().initiative = JSON.parse(prev);
     changed(); toast('Undone');
   }
-  const changed = () => { Store.save(); publishToPlayers(); draw(); if (window.Maps) Maps.rerender(); };
+  const changed = () => { if (window.Sheets) Sheets.syncFromCombat(); Store.save(); publishToPlayers(); draw(); if (window.Maps) Maps.rerender(); };
 
   function sortList() {
     const s = ini(), cur = s.combatants[s.turn];
@@ -69,9 +69,9 @@ window.Initiative = (() => {
     if (!party.length) { toast('Add your party in Settings first', 'err'); App.show('settings'); return; }
     act('Added the party', () => {
       const have = new Set(ini().combatants.filter(c => c.kind === 'pc').map(c => c.name.toLowerCase()));
-      party.filter(p => !have.has(p.name.toLowerCase())).forEach(p => ini().combatants.push({
-        id: U.uid(), baseName: p.name, name: p.name, kind: 'pc', bonus: Number(p.initBonus) || 0, init: null,
-        hp: p.hp ? Number(p.hp) : null, maxHp: p.hp ? Number(p.hp) : null, ac: p.ac ? Number(p.ac) : null, conditions: [], hidden: false, defeated: false }));
+      party.filter(p => !have.has(p.name.toLowerCase())).forEach(p => { const n = Sheets.numbers(p); ini().combatants.push({
+        id: U.uid(), baseName: p.name, name: p.name, kind: 'pc', bonus: n.initBonus, init: null,
+        hp: n.hp, maxHp: n.maxHp, ac: n.ac, conditions: [], hidden: false, defeated: false }); });
     });
   }
 

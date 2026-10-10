@@ -1,9 +1,9 @@
 // Local network server for players' phones.
 // Phones load a small web page and receive live updates over Server-Sent Events.
-// Phones can read published state, register a name, keep their own private notes page, and send three
-// small player actions (move one of *their* map tokens, ping the map, upload their character token).
-// The DM app checks every action (token ownership, map settings) before applying it; phones cannot
-// change anything else in the DM's game.
+// Phones can read published state, register a name, keep their own private notes page, and send a few
+// small player actions (move one of *their* map tokens, ping the map, upload their character token, save
+// their own character sheet, send the DM a roll or a card). The DM app checks every action (token ownership,
+// map settings, sheet and roll cleaning) before applying it; phones cannot change anything else in the DM's game.
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
@@ -18,7 +18,7 @@ class PlayerServer {
     this.mediaDir = mediaDir;
     this.clients = new Set(); // { res, player, display }
     this.known = new Map();   // lowercased name -> { name, lastSeen }
-    this.pub = { initiative: null, handouts: [], party: [], partyCards: [], wiki: [], wikiImages: [], map: null, calendar: null };
+    this.pub = { initiative: null, handouts: [], party: [], partyCards: [], wiki: [], wikiImages: [], map: null, calendar: null, feed: [] };
     this.onPlayers = () => {};
     this.onAction = () => {}; // (action) => void, handled by the DM app
     this.lastPing = new Map();
@@ -52,7 +52,8 @@ class PlayerServer {
     const handouts = (this.pub.handouts || []).filter(h => forMe(h.to));
     const wiki = (this.pub.wiki || []).filter(w => forMe(w.to));
     const card = (this.pub.partyCards || []).find(c => c.name.toLowerCase() === me) || null;
-    return { initiative: this.pub.initiative, handouts, wiki, map: this.pub.map, calendar: this.pub.calendar, party: this.pub.party || [], card, you: client.player || null };
+    const feed = client.display ? [] : (this.pub.feed || []).filter(f => (f.player || '').toLowerCase() === me);
+    return { initiative: this.pub.initiative, handouts, wiki, map: this.pub.map, calendar: this.pub.calendar, party: this.pub.party || [], card, feed, you: client.player || null };
   }
 
   send(client) {
@@ -89,18 +90,27 @@ class PlayerServer {
       return;
     }
 
-    // Player actions: POST /api/move {map, token, x, y}, /api/ping {map, x, y}, /api/token {dataUrl}
-    if (req.method === 'POST' && ['/api/move', '/api/ping', '/api/token'].includes(p)) {
+    // Player actions: POST /api/move {map, token, x, y}, /api/ping {map, x, y}, /api/token {dataUrl},
+    // /api/sheet {model} (the player's own character sheet), /api/share {share} (a roll or a card for the DM).
+    if (req.method === 'POST' && ['/api/move', '/api/ping', '/api/token', '/api/sheet', '/api/share'].includes(p)) {
       const player = (url.searchParams.get('player') || '').trim().slice(0, 40);
       if (!player) { res.writeHead(400); return res.end(); }
-      const limit = p === '/api/token' ? 3_000_000 : 2000;
+      const limit = p === '/api/token' ? 3_000_000 : p === '/api/sheet' ? 400_000 : p === '/api/share' ? 10_000 : 2000;
       let body = '';
       req.on('data', (chunk) => { body += chunk; if (body.length > limit) { res.writeHead(413); res.end(); req.destroy(); } });
       req.on('end', () => {
         let data;
         try { data = JSON.parse(body || '{}'); } catch { res.writeHead(400); return res.end(); }
         const num = (v) => Number.isFinite(Number(v)) ? Number(v) : null;
-        if (p === '/api/move') {
+        if (p === '/api/sheet') {
+          if (!data || typeof data.model !== 'object') { res.writeHead(400); return res.end(); }
+          this.onAction({ type: 'sheet', player, model: data.model });
+        } else if (p === '/api/share') {
+          const last = this.lastPing.get('share:' + player.toLowerCase()) || 0;
+          if (Date.now() - last < 400 || !data || typeof data.share !== 'object') { res.writeHead(429); return res.end(); }
+          this.lastPing.set('share:' + player.toLowerCase(), Date.now());
+          this.onAction({ type: 'share', player, share: data.share });
+        } else if (p === '/api/move') {
           if (num(data.x) == null || num(data.y) == null) { res.writeHead(400); return res.end(); }
           this.onAction({ type: 'move', player, map: String(data.map || ''), token: String(data.token || ''), x: num(data.x), y: num(data.y) });
         } else if (p === '/api/ping') {

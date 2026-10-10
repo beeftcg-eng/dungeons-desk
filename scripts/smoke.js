@@ -37,6 +37,13 @@ app.on('browser-window-created', (_, w) => {
           fs.writeFileSync(`${OUT}/phone-${t}.png`, (await pw.capturePage()).toPNG());
           await pw.webContents.executeJavaScript(`document.querySelector('.viewer .close')?.click()`);
         }
+        // PHONE_STEPS="js|||js|||…" runs each step on the phone page and captures phone-step1.png, phone-step2.png, …
+        let n = 0;
+        for (const step of (process.env.PHONE_STEPS || '').split('|||').filter(Boolean)) {
+          try { log('PHONE_STEP' + (++n), JSON.stringify(await pw.webContents.executeJavaScript(step))); } catch (e) { log('PHONE_STEP' + n, e.message); }
+          await sleep(900);
+          fs.writeFileSync(`${OUT}/phone-step${n}.png`, (await pw.capturePage()).toPNG());
+        }
         if (process.env.PHONE_EVAL) log('PHONE_EVAL', JSON.stringify(await pw.webContents.executeJavaScript(process.env.PHONE_EVAL)));
         pw.destroy();
       }

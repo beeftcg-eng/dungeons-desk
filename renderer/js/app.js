@@ -22,6 +22,7 @@ window.App = (() => {
     await Store.load();
     for (const [name, m] of Object.entries(modules)) m.mount($('#view-' + name));
     Dice.mount();
+    Sheets.mount();
     $$('#rail button[data-view]').forEach(b => b.addEventListener('click', () => show(b.dataset.view)));
     $('#campaign-btn').addEventListener('click', Campaigns.open);
     Campaigns.refreshRail();

@@ -108,6 +108,8 @@
   .pip.ok { border-color: var(--green); } .pip.ok.on { background: var(--green); } .pip.bad { border-color: var(--red); } .pip.bad.on { background: var(--red); }
   .mynotes { width: 100%; min-height: 45vh; font-size: 16px; line-height: 1.5; padding: 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--text); resize: vertical; }
   .saved { font-size: 12px; color: var(--dim); text-align: right; }
+  .rollpop { position: fixed; left: 12px; right: 12px; top: calc(12px + env(safe-area-inset-top)); z-index: 75; max-width: 420px; margin: 0 auto; background: var(--panel2); border: 2px solid var(--accent); border-radius: 14px; padding: 12px 16px; text-align: center; box-shadow: 0 14px 40px rgba(0,0,0,.6); transition: opacity .4s; }
+  .rollpop.out { opacity: 0; }
   /* First-time tour */
   .tut-dim { position: fixed; inset: 0; background: rgba(5,3,10,.72); z-index: 30; }
   .tut-card { position: fixed; left: 12px; right: 12px; bottom: calc(14px + env(safe-area-inset-bottom)); z-index: 32; background: var(--panel); border: 1px solid var(--accent); border-radius: 16px; padding: 18px 18px 14px; box-shadow: 0 14px 40px rgba(0,0,0,.6); max-width: 560px; margin: 0 auto; }
@@ -155,6 +157,9 @@
 <script src="/shared/handout.js"></script>
 <script src="/shared/map-render.js"></script>
 <link rel="stylesheet" href="/shared/statblock.css">
+<link rel="stylesheet" href="/shared/charsheet.css">
+<script src="/shared/charsheet-data.js"></script>
+<script src="/shared/charsheet.js"></script>
 <script>
 (() => {
   const $ = (s) => document.querySelector(s);
@@ -192,7 +197,7 @@
   }
   function join(name) {
     name = (name || '').trim(); if (!name) return;
-    me = name; store.set('dm.player', me); notesLoaded = false; maybeTour(); const ta = document.querySelector('#char .mynotes'); if (ta) ta.value = '';
+    me = name; store.set('dm.player', me); notesLoaded = false; maybeTour(); const ta = document.querySelector('#mebox .mynotes'); if (ta) ta.value = '';
     $('#join').hidden = true; $('#app').hidden = false; $('#me').hidden = false;
     connect();
   }
@@ -342,29 +347,70 @@
     c.addEventListener('wheel', (e) => { e.preventDefault(); const r = c.getBoundingClientRect(); zoomAt(e.deltaY < 0 ? 1.12 : 1 / 1.12, e.clientX - r.left, e.clientY - r.top); }, { passive: false });
   }
 
-  // ---------- Me: character card + private notes ----------
-  let notesLoaded = false, notesTimer = null;
+  // ---------- Me: character sheet, token and private notes ----------
+  // The sheet (shared/charsheet.js) is mounted once per character. Edits are sent to the DM app, which saves them;
+  // updates coming back are skipped for a moment after the player's own edit so typing isn't interrupted.
+  let notesLoaded = false, notesTimer = null, sheet = null, sheetFor = null, sheetSent = 0, sheetTimer = null, lastIncoming = '';
+  const feedSeen = new Set(); let feedPrimed = false;
+  let meBoxEl = null;
+  function meBox() {
+    if (meBoxEl) return meBoxEl;
+    const box = meBoxEl = document.createElement('div'); box.id = 'mebox';
+    box.innerHTML = '<div class="card" id="tokcard"></div><div class="card"><div style="display:flex;justify-content:space-between;align-items:center"><b>📝 My notes</b><span class="saved" id="saved"></span></div><p style="color:var(--dim);font-size:13px;margin:4px 0 8px">Only you see these. They\'re saved on the DM\'s computer so they\'re here next session.</p><textarea class="mynotes" placeholder="Names, clues, loot, things to remember…"></textarea></div><button class="btn" id="replaytour" style="width:100%;margin-bottom:16px">❓ Show the tour again</button>';
+    box.querySelector('#replaytour').addEventListener('click', startTour);
+    box.querySelector('.mynotes').addEventListener('input', (e) => {
+      $('#saved').textContent = 'Saving…';
+      clearTimeout(notesTimer);
+      notesTimer = setTimeout(() => fetch('/api/notes?player=' + encodeURIComponent(me), { method: 'POST', body: e.target.value })
+        .then(() => { $('#saved').textContent = 'Saved'; }).catch(() => { $('#saved').textContent = 'Not saved — reconnecting'; }), 700);
+    });
+    return box;
+  }
+  const liveOf = (c) => ({ inCombat: c.inCombat, hp: c.hp, maxHp: c.maxHp, ac: c.ac, conditions: c.conditions || [], deathSaves: c.deathSaves });
+  function sendSheet(model) {
+    sheetSent = Date.now();
+    clearTimeout(sheetTimer);
+    sheetTimer = setTimeout(() => post('/api/sheet', { model: { cls: model.cls, level: model.level, ac: model.ac, hp: model.hp, initBonus: model.initBonus, sheet: model.sheet } }), 600);
+  }
+  function shareToDm(sh) {
+    return fetch('/api/share?player=' + encodeURIComponent(me), { method: 'POST', body: JSON.stringify({ share: sh }) }).then(r => r.ok);
+  }
   function renderMe() {
-    const el = $('#char');
-    if (!el.querySelector('.mynotes')) {
-      el.innerHTML = '<div id="pccard"></div><div class="card" id="tokcard"></div><div class="card"><div style="display:flex;justify-content:space-between;align-items:center"><b>📝 My notes</b><span class="saved" id="saved"></span></div><p style="color:var(--dim);font-size:13px;margin:4px 0 8px">Only you see these. They\'re saved on the DM\'s computer so they\'re here next session.</p><textarea class="mynotes" placeholder="Names, clues, loot, things to remember…"></textarea></div><button class="btn" id="replaytour" style="width:100%;margin-bottom:16px">❓ Show the tour again</button>';
-      el.querySelector('#replaytour').addEventListener('click', startTour);
-      el.querySelector('.mynotes').addEventListener('input', (e) => {
-        $('#saved').textContent = 'Saving…';
-        clearTimeout(notesTimer);
-        notesTimer = setTimeout(() => fetch('/api/notes?player=' + encodeURIComponent(me), { method: 'POST', body: e.target.value })
-          .then(() => { $('#saved').textContent = 'Saved'; }).catch(() => { $('#saved').textContent = 'Not saved — reconnecting'; }), 700);
-      });
+    const el = $('#char'), c = data.card, box = meBox();
+    if (!c) {
+      if (sheet) { sheet.destroy(); sheet = null; sheetFor = null; }
+      el.innerHTML = `<div class="card"><div class="pcname">${esc(me || '')}</div><p style="color:var(--dim)">Ask the DM to add your character to the party in their Settings. Then your character sheet appears here.</p></div>`;
+      el.append(box);
+    } else if (!sheet || sheetFor !== c.name) {
+      if (sheet) sheet.destroy();
+      el.innerHTML = '<div id="pcsheet"></div>';
+      sheetFor = c.name; lastIncoming = JSON.stringify(c.model);
+      sheet = CharSheet.mount(el.querySelector('#pcsheet'), { model: c.model, live: liveOf(c), mode: 'player', onChange: sendSheet, onShare: shareToDm,
+        extraTabs: [{ id: 'me', label: '📝 Notes', el: box }] });
+    } else {
+      const incoming = JSON.stringify(c.model);
+      if (incoming !== lastIncoming && Date.now() - sheetSent > 2500) { lastIncoming = incoming; sheet.set(c.model, liveOf(c)); }
+      else sheet.set(sheet.get(), liveOf(c));
     }
     drawTokenCard();
-    const c = data.card, box = $('#pccard');
-    if (!c) { box.innerHTML = `<div class="card"><div class="pcname">${esc(me || '')}</div><p style="color:var(--dim)">Ask the DM to add your character to the party to see your stats here.</p></div>`; return; }
-    const pct = c.maxHp ? Math.max(0, Math.min(1, c.hp / c.maxHp)) : null;
-    box.innerHTML = `<div class="card"><div class="pcname">${esc(c.name)}</div><div style="color:var(--dim)">${esc([c.cls, c.level ? 'Level ' + c.level : ''].filter(Boolean).join(' · '))}${c.inCombat ? ' · ⚔ In combat' : ''}</div>
-      <div class="stats"><div class="stat"><b>${esc(c.ac ?? '—')}</b><span>Armor Class</span></div><div class="stat"><b>${esc(c.hp ?? '—')}${c.maxHp ? `<small style="font-size:14px;color:var(--dim)"> / ${esc(c.maxHp)}</small>` : ''}</b><span>Hit Points</span></div></div>
-      ${pct != null ? `<div class="hpbar"><i style="width:${pct * 100}%;background:${pct > .5 ? '#4caf50' : pct > .25 ? '#e0a030' : '#d9443a'}"></i></div>` : ''}
-      ${c.conditions && c.conditions.length ? `<div class="conds" style="margin-top:10px">${c.conditions.map(x => `<span class="cond">${esc(x)}</span>`).join('')}</div>` : ''}
-      ${c.deathSaves ? `<div class="ds"><b>Death saves</b><span>${[0, 1, 2].map(k => `<i class="pip ok${k < c.deathSaves.s ? ' on' : ''}"></i>`).join('')}</span><span>${[0, 1, 2].map(k => `<i class="pip bad${k < c.deathSaves.f ? ' on' : ''}"></i>`).join('')}</span></div>` : ''}</div>`;
+    showFeed();
+  }
+  // Results of this player's rolls come back from the DM app; pop up the new ones.
+  function showFeed() {
+    const list = data.feed || [];
+    const fresh = list.filter(e => !feedSeen.has(e.id));
+    list.forEach(e => feedSeen.add(e.id));
+    if (!feedPrimed) { feedPrimed = true; return; }
+    const e = fresh.find(x => x.kind !== 'card');
+    if (!e) return;
+    document.querySelectorAll('.rollpop').forEach(x => x.remove());
+    const pop = document.createElement('div');
+    pop.className = 'rollpop';
+    pop.innerHTML = CharSheet.feedHtml(e, 'Sent to the DM');
+    pop.addEventListener('click', () => pop.remove());
+    document.body.append(pop);
+    buzz(e.crit ? [80, 60, 80, 60, 160] : 60);
+    setTimeout(() => { pop.classList.add('out'); setTimeout(() => pop.remove(), 400); }, 7000);
   }
   // ---------- My token: pick a photo, frame it in a circle, send it to the DM ----------
   let tok = { img: null, zoom: 1, ox: 0, oy: 0, ring: '#d4a64a' }, tokDirty = false;
@@ -421,7 +467,7 @@
 
   function loadNotes() {
     if (notesLoaded || !me) return;
-    fetch('/api/notes?player=' + encodeURIComponent(me)).then(r => r.text()).then(t => { const ta = document.querySelector('#char .mynotes'); if (ta && !ta.value) ta.value = t; notesLoaded = true; }).catch(() => {});
+    fetch('/api/notes?player=' + encodeURIComponent(me)).then(r => r.text()).then(t => { const ta = document.querySelector('#mebox .mynotes'); if (ta && !ta.value) ta.value = t; notesLoaded = true; }).catch(() => {});
   }
 
   function renderTurns() {
@@ -481,7 +527,7 @@
     { tab: 'handouts', icon: '✉', title: () => 'Handouts', body: 'Letters, clues, wanted posters and secrets from the DM pop up here, and some are just for you. A red badge means something new.' },
     { tab: 'wiki', icon: '📚', title: () => 'Wiki', body: 'People, places and lore the DM has shared with the party. Tap a highlighted name to jump to that page.' },
     { tab: 'map', icon: '🗺', title: () => 'Map', body: 'When the DM shows a map:<ul><li><b>✋ Move</b>: drag your own token. Fog clears as you explore.</li><li><b>📏 Measure</b>: drag to measure (1 square = 5 ft).</li><li><b>📍 Ping</b>: tap to point something out.</li></ul>Pinch to zoom, drag to look around.' },
-    { tab: 'char', icon: '👤', title: () => 'You', body: 'Your HP, AC and conditions. <b>Pick a picture for your token</b> here (it\'s what the DM puts on the map), and keep private notes that are saved for next session.' },
+    { tab: 'char', icon: '📜', title: () => 'Your character sheet', body: 'Your whole character: stats, attacks, spells, gear and features. Tap <b>✏ Edit</b> to set it up; picking your class and level fills in the rest.<ul><li><b>Tap a save, skill, attack or spell</b> to roll it. The DM sees the result.</li><li><b>📤 Show the DM</b> sends them a spell, feature or item.</li></ul>Your token picture and private notes are under <b>📝 Notes</b>.' },
     { tab: 'turns', icon: '🎲', title: () => 'You\'re all set!', body: 'Tip: add this page to your home screen (browser menu → "Add to Home screen") so it\'s one tap away next session. You can replay this tour from the 👤 Me tab.' },
   ];
   let tourStep = -1;
