@@ -40,6 +40,10 @@ window.Sheets = (() => {
     if (!e) return;
     const p = member(player);
     const entry = { ...e, player: p ? p.name : String(player).slice(0, 40), byDm: !!byDm };
+    // Some shares also update the turn order.
+    if (e.tag === 'init' && e.kind === 'roll' && Initiative.playerInit(entry.player, e.total)) entry.note = 'Filled in the turn order';
+    if (e.tag === 'death' && e.kind === 'roll' && Initiative.playerDeathSave(entry.player, e.total)) entry.note = 'Marked in the tracker';
+    if ((e.tag === 'conc' || e.tag === 'conc-end') && Initiative.playerConcentration(entry.player, e.tag === 'conc')) entry.note = e.tag === 'conc' ? 'Marked Concentrating in the tracker' : 'Concentrating removed in the tracker';
     feed.unshift(entry);
     feed = feed.slice(0, 80);
     pop(entry);
@@ -47,23 +51,63 @@ window.Sheets = (() => {
     if (!byDm) publishToPlayers();
   }
 
+  // Homebrew spells and items whose notes are shared with players (share: players, or a list of names) show up in
+  // their character sheet searches. DM-only parts of the note (secret callouts, %% comments %%) are left out.
+  let hbSig = '', hbCache = { spells: [], items: [] };
+  const playerText = (t) => String(t || '').replace(/%%[\s\S]*?%%/g, '').replace(/^> ?\[!secret\][^\n]*\n(>.*\n?)*/gim, '').trim();
+  function playerHomebrew() {
+    if (!window.Homebrew || !window.Notes) return hbCache;
+    const sig = Notes.list().map(n => n.path + n.mtime).join('|');
+    if (sig === hbSig) return hbCache;
+    const hb = Homebrew.list(), cache = Notes.notesCache(), to = (path) => Notes.shareOf(cache.get(path));
+    hbCache = {
+      spells: hb.spells.filter(x => to(x.path)).map(x => ({ name: x.name, level: x.level, school: x.school, time: x.time, range: x.range, comp: x.comp, dur: x.dur,
+        conc: x.conc || undefined, ritual: x.ritual || undefined, classes: x.classes, desc: playerText(x.desc), homebrew: true, to: to(x.path) })),
+      items: hb.items.filter(x => to(x.path)).map(x => ({ name: x.name, rarity: x.rarity, type: x.type, desc: playerText(x.desc), homebrew: true, to: to(x.path) })),
+    };
+    hbSig = sig;
+    return hbCache;
+  }
+  // The DM's own sheet view knows every homebrew spell and item, shared or not.
+  function allHomebrew() {
+    if (!window.Homebrew) return { spells: [], items: [] };
+    const hb = Homebrew.list();
+    return { spells: hb.spells.map(x => ({ ...x, homebrew: true })), items: hb.items.map(x => ({ ...x, homebrew: true })) };
+  }
+
   // What phones get: recent results, each phone filters to its own (server.js viewFor).
   const playerFeed = () => feed.filter(f => !f.byDm).slice(0, 40);
 
   const who = (e) => e.byDm ? `${e.player} · rolled by you` : e.player;
+  // Reported damage or healing gets an Apply button; applying it goes through the initiative tracker.
+  function entryBody(e) {
+    const box = h('div', { html: CharSheet.feedHtml(e, who(e)) });
+    if (e.kind === 'hp' && !e.applied) box.append(h('button.small.primary', { onclick: (ev) => {
+      ev.stopPropagation();
+      if (!Initiative.playerHp(e.player, e.amount, e.heal)) return toast(`${e.player} isn't in the turn order with HP set`, 'err');
+      e.applied = true; publishToPlayers(); redrawEntry(e);
+    } }, e.heal ? `Apply: +${e.amount} HP` : `Apply: −${e.amount} HP`));
+    return box;
+  }
+  function redrawEntry(e) {
+    U.$$('.feed-card').filter(c => c.feedEntry === e).forEach(c => { c.firstChild.replaceWith(entryBody(e)); });
+    if (!els.panel.classList.contains('hidden')) drawPanel();
+  }
   function pop(e) {
-    const card = h('div.feed-card' + (e.kind === 'card' ? '.is-card' : ''), { html: CharSheet.feedHtml(e, who(e)), onclick: () => { clearTimeout(card.t); card.classList.add('pinned'); } });
+    const card = h('div.feed-card' + (e.kind === 'card' ? '.is-card' : ''), { onclick: () => { clearTimeout(card.t); card.classList.add('pinned'); } }, entryBody(e));
+    card.feedEntry = e;
     card.append(h('button.feed-x', { title: 'Dismiss', onclick: (ev) => { ev.stopPropagation(); card.remove(); } }, '✕'));
     els.stack.prepend(card);
     [...els.stack.children].slice(5).forEach(x => x.remove());
-    card.t = setTimeout(() => { card.classList.add('out'); setTimeout(() => card.remove(), 400); }, e.kind === 'card' ? 30000 : 15000);
+    // Damage reports wait until they're applied or dismissed.
+    if (e.kind !== 'hp') card.t = setTimeout(() => { card.classList.add('out'); setTimeout(() => card.remove(), 400); }, e.kind === 'card' ? 30000 : 15000);
   }
 
   function drawBadge() { els.badge.textContent = unread; els.badge.hidden = !unread; }
   function drawPanel() {
     els.list.innerHTML = '';
     if (!feed.length) els.list.append(h('p.dim', 'Nothing yet. When players roll or share something from their character sheet on their phone, it shows up here.'));
-    feed.forEach(e => els.list.append(h('div.feed-row', h('div', { html: CharSheet.feedHtml(e, who(e)) }), h('span.dim.small', new Date(e.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })))));
+    feed.forEach(e => els.list.append(h('div.feed-row', entryBody(e), h('span.dim.small', new Date(e.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })))));
   }
   function togglePanel() {
     els.panel.classList.toggle('hidden');
@@ -73,8 +117,11 @@ window.Sheets = (() => {
   // Open a party member's sheet in the DM app.
   function openSheet(p) {
     if (!p.name) return toast('Give the character a name first', 'err');
+    CharSheet.setHomebrew(allHomebrew());
     const box = h('div.sheet-host');
-    const m = U.modal(`📜 ${p.name}`, [h('p.dim.small', `Changes are saved and show up on ${p.player || p.name}'s phone. Rolls you make here stay on your screen.`), box],
+    const print = (mode) => dm.print.html(CharSheet.printHtml(modelOf(p)), mode, `${p.name} character sheet.pdf`).then(r => { if (r && mode === 'pdf') toast('Saved ' + r); });
+    const m = U.modal(`📜 ${p.name}`, [h('div.row', h('p.dim.small.grow', `Changes are saved and show up on ${p.player || p.name}'s phone. Rolls you make here stay on your screen.`),
+      h('button.small', { onclick: () => print('print') }, '🖨 Print'), h('button.small', { onclick: () => print('pdf') }, '📄 Save as PDF')), box],
       { onClose: () => { if (open) open.api.destroy(); open = null; } });
     box.closest('.modal').classList.add('sheet-modal');
     const api = CharSheet.mount(box, {
@@ -121,5 +168,5 @@ window.Sheets = (() => {
     dm.onPlayerAction(playerAction);
   }
 
-  return { mount, open: openSheet, playerFeed, refreshOpen, syncFromCombat, numbers };
+  return { mount, open: openSheet, playerFeed, playerHomebrew, refreshOpen, syncFromCombat, numbers };
 })();

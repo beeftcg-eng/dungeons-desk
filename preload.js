@@ -21,7 +21,7 @@ contextBridge.exposeInMainWorld('dm', {
   file: { savePng: call('file:savePng') },
   print: { html: call('print:html') },
   server: {
-    info: call('server:info'), publish: call('server:publish'), openDisplay: call('server:openDisplay'),
+    info: call('server:info'), publish: call('server:publish'), openDisplay: call('server:openDisplay'), newCode: call('server:newCode'),
     onPlayers: (fn) => ipcRenderer.on('server:players', (_e, list) => fn(list)),
   },
   openExternal: call('shell:open'),

@@ -4,6 +4,7 @@
 // small player actions (move one of *their* map tokens, ping the map, upload their character token, save
 // their own character sheet, send the DM a roll or a card). The DM app checks every action (token ownership,
 // map settings, sheet and roll cleaning) before applying it; phones cannot change anything else in the DM's game.
+// All of it needs the DM's join code (see authorized()).
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
@@ -18,10 +19,31 @@ class PlayerServer {
     this.mediaDir = mediaDir;
     this.clients = new Set(); // { res, player, display }
     this.known = new Map();   // lowercased name -> { name, lastSeen }
-    this.pub = { initiative: null, handouts: [], party: [], partyCards: [], wiki: [], wikiImages: [], map: null, calendar: null, feed: [] };
+    this.pub = { initiative: null, handouts: [], party: [], partyCards: [], wiki: [], wikiImages: [], map: null, calendar: null, feed: [], homebrew: { spells: [], items: [] } };
     this.onPlayers = () => {};
     this.onAction = () => {}; // (action) => void, handled by the DM app
     this.lastPing = new Map();
+    this.code = null;          // join code; phones send it as ?code= on /events and every /api call
+    this.fails = new Map();    // ip -> { n, t } wrong join codes, to slow down guessing
+  }
+
+  // A new code disconnects every phone; they rejoin by scanning the QR code again or typing the new code.
+  setCode(code) {
+    this.code = String(code);
+    for (const c of this.clients) c.res.end();
+    this.clients.clear();
+    this.onPlayers(this.playerList());
+  }
+
+  // True when the request carries the right join code. Too many wrong codes from one address get refused for a minute.
+  authorized(req, url) {
+    if (!this.code) return true;
+    const ip = req.socket.remoteAddress || '';
+    const f = this.fails.get(ip);
+    if (f && f.n >= 8 && Date.now() - f.t < 60_000) return false;
+    if (url.searchParams.get('code') === this.code) { this.fails.delete(ip); return true; }
+    this.fails.set(ip, { n: f && Date.now() - f.t < 60_000 ? f.n + 1 : 1, t: Date.now() });
+    return false;
   }
 
   setMediaDir(dir) { this.mediaDir = dir; }
@@ -53,7 +75,9 @@ class PlayerServer {
     const wiki = (this.pub.wiki || []).filter(w => forMe(w.to));
     const card = (this.pub.partyCards || []).find(c => c.name.toLowerCase() === me) || null;
     const feed = client.display ? [] : (this.pub.feed || []).filter(f => (f.player || '').toLowerCase() === me);
-    return { initiative: this.pub.initiative, handouts, wiki, map: this.pub.map, calendar: this.pub.calendar, party: this.pub.party || [], card, feed, you: client.player || null };
+    const hb = this.pub.homebrew || {};
+    const homebrew = client.display ? null : { spells: (hb.spells || []).filter(x => forMe(x.to)), items: (hb.items || []).filter(x => forMe(x.to)) };
+    return { initiative: this.pub.initiative, handouts, wiki, map: this.pub.map, calendar: this.pub.calendar, party: this.pub.party || [], card, feed, homebrew, you: client.player || null };
   }
 
   send(client) {
@@ -76,6 +100,12 @@ class PlayerServer {
   handle(req, res) {
     const url = new URL(req.url, 'http://x');
     const p = decodeURIComponent(url.pathname);
+
+    // Everything live (state, notes, player actions) needs the join code. The page itself, shared code and media don't.
+    if (p === '/events' || p.startsWith('/api/')) {
+      if (!this.authorized(req, url)) { res.writeHead(401, { 'Content-Type': 'text/plain' }); return res.end('Wrong join code'); }
+      if (p === '/api/join') { res.writeHead(204); return res.end(); }
+    }
 
     if (p === '/events') {
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });

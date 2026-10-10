@@ -63,6 +63,7 @@ for c in L('Classes'):
                     'primary': c['primary_ability']['desc'], 'profs': profs, 'skillChoose': ch.get('choose', 0), 'skillFrom': skill_from,
                     'spellAbility': ABIL[sp['spellcasting_ability']['name']] if sp else None,
                     'equipment': equip_options(c.get('starting_equipment_options')), 'levels': lv,
+                    'multiProfs': [p['name'] for p in (c.get('multi_classing') or {}).get('proficiencies', [])],
                     'subclasses': subclasses.get(c['index'], [])})
 
 traits = {t['index']: t for t in L('Traits')}

@@ -8,7 +8,8 @@
     "dist": "electron-builder",
     "dist:linux": "electron-builder --linux",
     "dist:win": "electron-builder --win",
-    "release": "node scripts/release.js"
+    "release": "node scripts/release.js",
+    "test": "node scripts/test-charsheet.js"
   },
   "author": {
     "name": "beeftcg-eng",

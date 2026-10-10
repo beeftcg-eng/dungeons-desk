@@ -13,7 +13,7 @@ There is no build step, bundler or TypeScript. Edit the files and restart the ap
 ## Layout
 
 - `main.js`: main process. Holds the config (`~/.config/Dungeons Desk/config.json`: current vault, port, and the `campaigns` list of known vault folders), campaign create/open/rename, file access for the vault, all IPC handlers, and printing/PDF (renders HTML in a hidden window).
-- `server.js`: `PlayerServer` on port 7777, falling back to the next free port. It serves `player/` and `shared/`, serves `<vault>/.dmtools/media/` at `/media/`, and pushes live state over **Server-Sent Events** at `/events?player=Name`. Phones are **read-only** apart from these exceptions:
+- `server.js`: `PlayerServer` on port 7777, falling back to the next free port. It serves `player/` and `shared/`, serves `<vault>/.dmtools/media/` at `/media/`, and pushes live state over **Server-Sent Events** at `/events?player=Name`. Every `/events` and `/api/*` request needs the six-digit **join code** (`?code=`, stored as `config.joinCode`, rotated by `server:newCode`); `authorized()` refuses everything else and throttles guessing. The QR code and the TV display URL carry the code. Phones are **read-only** apart from these exceptions:
   - `/api/notes?player=Name` (GET/POST): each player's private notes page, stored in `<vault>/.dmtools/players/`.
   - `POST /api/sheet` and `/api/share`: the player's own character sheet, and a roll or "show the DM" card. Both are forwarded via `player:action` to `Sheets.playerAction()` (`renderer/js/sheets.js`), which runs `CharSheet.clean()` / `cleanShare()` on them, saves the sheet onto the matching party member (never its name, player or token), and does the rolling itself. Results are published as `pub.feed`, and `viewFor()` gives each phone only its own entries. Rolls the DM makes from a sheet are `byDm` and never published.
   - `POST /api/move`, `/api/ping` and `/api/token`: player map actions. The server only validates their shape and forwards them (via the `player:action` IPC) to `Maps.playerAction()`. That function is the security check: a player can only move a token whose `owner` matches their name, only when the map is shown and `playerMove` is on. Pings are rate-limited, and tokens are image-only with a 3 MB cap.
@@ -35,6 +35,10 @@ There is no build step, bundler or TypeScript. Edit the files and restart the ap
   - Player tokens come from `party[].token`, which the player uploads from the phone's Me tab or the DM picks in Settings.
   - Pings carry the sender's time, so phones stamp their own `seen` time to cope with clock differences.
 - **Character sheets**: `shared/charsheet.js` (`CharSheet.mount()`) is one component used by the phone's Me tab and the DM's sheet modal (Settings → 📜). A party member's model is `{name, cls, level, ac, hp, initBonus, sheet}`. The top-level fields are the same ones the Settings table uses, and `sheet.auto.{ac,hp,init,speed}` decides whether they're calculated (`applyAuto()`) or typed. Rules data is `shared/charsheet-data.js` (`CHARDATA`), **generated** by `scripts/convert_charsheet.py` from 5e-database's `src/2024/en/5e-SRD-*.json` (saved as `2024-<Name>.json`). Don't edit it by hand. Initiative's "Add the party" uses `Sheets.numbers(p)`, and `Sheets.syncFromCombat()` copies tracker HP back into `sheet.curHp`.
+  - Multiclass: `model.level` is the **total** level and `sheet.multi` holds the extra classes (`classParts()`). The first class gets the remainder.
+  - Shares can carry a `tag` (`init`, `death`, `conc`, `conc-end`), which `Sheets` routes to `Initiative.playerInit/playerDeathSave/playerConcentration`. `kind: 'hp'` reports wait in the feed for the DM to Apply (`Initiative.playerHp`).
+  - Homebrew notes shared with `share:` reach phones as `pub.homebrew` (`Sheets.playerHomebrew()`, with secrets and `%%` comments stripped; filtered per player in `viewFor()`) and are merged into the lists with `CharSheet.setHomebrew()`.
+  - `CharSheet.printHtml(model)` builds the printable sheet for `dm.print.html`.
 - `renderer/js/timeline.js`: the in-world calendar (`Store.calendar`) and timeline. A note appears there if its frontmatter has `world_date:`, written as `1024`, `1024-3-15` or `15 Thawmonth 1024`.
 - **Player wiki**: notes with `share: players` (or `share: [Name, …]`) in their frontmatter are rendered by `MD.render(src, { forPlayers })`, which strips `[!secret]` callouts and `%% comments %%`, unlinks unshared notes and rewrites image URLs. `Notes.playerWiki()` caches the result.
 - **Relationships**: write `- [[Target]] — label` lines under a `## Relationships` heading. They are parsed by `Notes.relationsIn()`, colored by `relColor()`, and drawn in Graph → Relationship web.
@@ -73,7 +77,7 @@ There is no build step, bundler or TypeScript. Edit the files and restart the ap
 
 ## Testing
 
-There are no unit tests. Use the smoke harness, which screenshots every view and logs console errors. **Always use a throwaway HOME** so it never touches the real vault or config:
+`npm test` runs `scripts/test-charsheet.js`: the character sheet rules checked against hand-worked characters. Add a case there when you change `derive()`. For everything else there are no unit tests; use the smoke harness, which screenshots every view and logs console errors. **Always use a throwaway HOME** so it never touches the real vault or config:
 
 ```bash
 S=$(mktemp -d); mkdir -p $S/home $S/shots
@@ -84,7 +88,7 @@ cat $S/shots/log.txt      # console warnings/errors (the CSP "Security Warning" 
 The smoke harness takes these options (setup code runs through `executeJavaScript`, because the app's CSP blocks `eval`):
 - `VIEWS=notes,initiative` limits which views it captures.
 - `PRE_<view>="js"` runs JS in the renderer before capturing that view.
-- `PHONE=1` also captures the phone page. Combine it with `PHONE_TABS=turns,handouts,wiki,map,char`, `PHONE_PLAYER=Thorin`, `PHONE_WIKI=<page title>` and `PHONE_EVAL="js"` (run on the phone page, which can `fetch` the server).
+- `PHONE=1` also captures the phone page (it passes the join code; `PHONE_NOCODE=1` leaves it off to see the code screen). Combine it with `PHONE_TABS=turns,handouts,wiki,map,char`, `PHONE_PLAYER=Thorin`, `PHONE_WIKI=<page title>` and `PHONE_EVAL="js"` (run on the phone page, which can `fetch` the server).
 - `PHONE_STEPS="js|||js|||…"` runs each step on the phone page and captures `phone-step1.png`, `phone-step2.png`, ….
 - `EXTRA="js"` logs the result of an expression.
 

@@ -26,9 +26,10 @@ app.on('browser-window-created', (_, w) => {
       }
       if (process.env.PHONE) {
         // PHONE_TABS=turns,wiki,map,me  captures each tab of the phone page as player PHONE_PLAYER (default Thorin).
-        const port = await js('dm.server.info().then(i => i.port)');
+        const { port, code } = await js('dm.server.info().then(i => ({ port: i.port, code: i.code }))');
         const pw = new BrowserWindow({ width: 400, height: 820, show: true });
-        await pw.loadURL(`http://127.0.0.1:${port}/?player=${encodeURIComponent(process.env.PHONE_PLAYER || 'Thorin')}`);
+        // PHONE_NOCODE=1 opens the page without the join code, to see the code screen.
+        await pw.loadURL(`http://127.0.0.1:${port}/?player=${encodeURIComponent(process.env.PHONE_PLAYER || 'Thorin')}${process.env.PHONE_NOCODE ? '' : '&code=' + code}`);
         await sleep(2500);
         if (process.env.PHONE_PRE) { log('PHONE_PRE', JSON.stringify(await pw.webContents.executeJavaScript(process.env.PHONE_PRE))); await sleep(1500); }
         for (const t of (process.env.PHONE_TABS || 'turns,handouts').split(',')) {

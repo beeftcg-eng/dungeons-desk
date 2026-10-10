@@ -190,6 +190,7 @@ window.publishToPlayers = U.debounce(() => {
     map: window.Maps ? Maps.playerView() : null,
     calendar: window.Timeline ? Timeline.playerDate() : null,
     feed: window.Sheets ? Sheets.playerFeed() : [],
+    homebrew: window.Sheets ? Sheets.playerHomebrew() : { spells: [], items: [] },
     ...(window.Notes ? Notes.playerWiki() : {}),
   });
   if (window.Sheets) Sheets.refreshOpen();

@@ -615,5 +615,5 @@ window.Notes = (() => {
     : /enemy|rival|hate|hunt|nemesis|betray|feud|kill|owes/i.test(label) ? '#d9443a'
     : /work|serve|member|leader|lead|boss|employ|agent|spy|sworn|loyal|follower/i.test(label) ? '#5fb3e8' : '#b9b2c9';
 
-  return { mount, open, create, refresh, flush: saveNow, playerWiki, relationsIn, relColor, notesCache: () => cache, withStatblocks, list, resolve, uniquePath };
+  return { mount, open, create, refresh, flush: saveNow, playerWiki, shareOf, relationsIn, relColor, notesCache: () => cache, withStatblocks, list, resolve, uniquePath };
 })();

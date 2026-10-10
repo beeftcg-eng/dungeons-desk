@@ -109,6 +109,8 @@ button.cs-dot:hover { background: var(--cs-well); }
 .cs-seg button.on { background: var(--accent); color: var(--cs-ink); font-weight: 700; }
 .cs-seg.small { margin: 6px 0 0; } .cs-seg.small button { padding: 5px 4px; font-size: 12.5px; }
 .cs-setup { border-color: var(--accent); }
+.cs-multi { display: grid; grid-template-columns: minmax(0, 3fr) 64px minmax(0, 3fr) 32px; gap: 6px; align-items: center; margin: 6px 0; }
+.cs-multi input { width: 100%; }
 .cs-castrow { display: flex; gap: 6px; margin: 8px 0; } .cs-castrow select { flex: 1; }
 /* Dialogs slide up from the bottom on phones and sit in the middle on wide screens. */
 .cs-dlg-wrap { position: fixed; inset: 0; z-index: 70; background: rgba(5,3,10,.6); display: flex; align-items: flex-end; justify-content: center; }
@@ -147,3 +149,10 @@ button.cs-dot:hover { background: var(--cs-well); }
   .cs-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .cs-tile b { font-size: 18px; }
 }
+.cs-dlg details { border-top: 1px solid var(--line); padding: 7px 0; }
+.cs-dlg details summary { cursor: pointer; font-weight: 600; }
+.cs-dlg details .cs-dlg-text { margin-top: 6px; max-height: 30vh; }
+.cs-dlg .cs-card select { width: 100%; margin-top: 4px; }
+.cs-asi-split { display: flex; gap: 6px; } .cs-asi-split select { flex: 1; }
+.cs-dlg .cs-newsub, .cs-dlg .cs-newfeat { width: 100%; }
+.cs [hidden], .cs-dlg [hidden] { display: none !important; }

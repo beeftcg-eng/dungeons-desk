@@ -135,6 +135,13 @@
 </head>
 <body>
 <header><span class="status" id="status" title="Connection"></span><h1><img src="/icon.png" alt="" style="width:24px;height:24px;vertical-align:-5px;margin-right:6px">Dungeons Desk</h1><button class="me" id="me"></button></header>
+<div id="codebox" class="join" hidden>
+  <h2>Join the game</h2>
+  <p style="color:var(--dim)">Type the join code shown on the DM's screen, under the QR code.</p>
+  <input id="codeIn" inputmode="numeric" autocomplete="off" maxlength="6" placeholder="6-digit code" style="text-align:center;letter-spacing:.3em;font-size:24px">
+  <button class="go" id="codeGo">Join</button>
+  <p id="codeErr" style="color:var(--red);min-height:1.4em"></p>
+</div>
 <div id="join" class="join" hidden>
   <h2>Who are you playing?</h2>
   <p style="color:var(--dim)">Pick your character so the DM can send you handouts.</p>
@@ -168,6 +175,10 @@
   const display = params.get('display') === '1';
   const store = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
   if (params.get('player')) store.set('dm.player', params.get('player'));
+  // The join code comes in the QR code link (?code=…) or is typed once, and is kept on this phone.
+  let code = params.get('code') || store.get('dm.code') || '';
+  if (params.get('code')) store.set('dm.code', code);
+  const qs = (extra = {}) => '?' + new URLSearchParams({ ...(me ? { player: me } : {}), code, ...extra }).toString();
   let me = display ? null : store.get('dm.player');
   let es = null, data = null, lastCurrent = null;
   let seen = new Set(JSON.parse(store.get('dm.seen') || '[]'));
@@ -183,11 +194,32 @@
   function connect() {
     if (es) es.close();
     firstLoad = true;
-    const q = display ? '?display=1' : (me ? '?player=' + encodeURIComponent(me) : '');
-    es = new EventSource('/events' + q);
+    es = new EventSource('/events' + (display ? '?' + new URLSearchParams({ display: '1', code }) : qs()));
     es.onopen = () => $('#status').classList.add('ok');
-    es.onerror = () => $('#status').classList.remove('ok');
+    // If the DM made a new join code, ask for it instead of retrying forever.
+    es.onerror = () => { $('#status').classList.remove('ok'); fetch('/api/join' + qs()).then(r => { if (r.status === 401) { es.close(); showCode(true); } }).catch(() => {}); };
     es.onmessage = (e) => { data = JSON.parse(e.data); render(); };
+  }
+
+  function showCode(wrong) {
+    $('#codebox').hidden = false; $('#join').hidden = true; $('#app').hidden = true; $('#me').hidden = true;
+    $('#codeErr').textContent = wrong && code ? 'That code didn\'t work. Check the DM\'s screen.' : '';
+    setTimeout(() => $('#codeIn').focus(), 50);
+  }
+  function tryCode(c) {
+    c = String(c || '').replace(/\D/g, '');
+    if (!c) return;
+    fetch('/api/join?code=' + c).then(r => {
+      if (r.status === 204) { code = c; store.set('dm.code', c); $('#codebox').hidden = true; start(); }
+      else $('#codeErr').textContent = r.status === 429 ? 'Too many tries. Wait a minute, then try again.' : 'That code didn\'t work. Check the DM\'s screen.';
+    }).catch(() => { $('#codeErr').textContent = 'Can\'t reach the DM\'s computer. Are you on the same Wi-Fi?'; });
+  }
+  $('#codeGo').addEventListener('click', () => tryCode($('#codeIn').value));
+  $('#codeIn').addEventListener('keydown', (e) => { if (e.key === 'Enter') tryCode(e.target.value); });
+  function start() {
+    connect();
+    maybeTour();
+    if (!display && !me) { $('#app').hidden = true; $('#join').hidden = false; }
   }
 
   function showJoin() {
@@ -299,7 +331,7 @@
   const myTokens = () => ((data && data.map && data.map.tokens) || []).filter(t => me && t.owner && t.owner.toLowerCase() === me.toLowerCase());
   function hint(text) { const el = document.querySelector('#map .maphint'); if (!el) return; el.textContent = text; el.hidden = !text; clearTimeout(hint.t); hint.t = setTimeout(() => (el.hidden = true), 2500); }
   function toMapPoint(c, cx, cy) { const r = c.getBoundingClientRect(); return { x: (cx - r.left - mapView.x) / mapView.s, y: (cy - r.top - mapView.y) / mapView.s }; }
-  function post(path, body) { return fetch(path + '?player=' + encodeURIComponent(me), { method: 'POST', body: JSON.stringify(body) }).catch(() => {}); }
+  function post(path, body) { return fetch(path + qs(), { method: 'POST', body: JSON.stringify(body) }).catch(() => {}); }
   setInterval(() => { if (data && data.map && (data.map.pings || []).length) drawMap(); }, 60);
   setInterval(() => { if (data && data.map && data.map.ping && Date.now() - data.map.ping.t < 4200) drawMap(); }, 50);
   window.addEventListener('resize', () => fitMap(false));
@@ -361,7 +393,7 @@
     box.querySelector('.mynotes').addEventListener('input', (e) => {
       $('#saved').textContent = 'Saving…';
       clearTimeout(notesTimer);
-      notesTimer = setTimeout(() => fetch('/api/notes?player=' + encodeURIComponent(me), { method: 'POST', body: e.target.value })
+      notesTimer = setTimeout(() => fetch('/api/notes' + qs(), { method: 'POST', body: e.target.value })
         .then(() => { $('#saved').textContent = 'Saved'; }).catch(() => { $('#saved').textContent = 'Not saved — reconnecting'; }), 700);
     });
     return box;
@@ -373,10 +405,11 @@
     sheetTimer = setTimeout(() => post('/api/sheet', { model: { cls: model.cls, level: model.level, ac: model.ac, hp: model.hp, initBonus: model.initBonus, sheet: model.sheet } }), 600);
   }
   function shareToDm(sh) {
-    return fetch('/api/share?player=' + encodeURIComponent(me), { method: 'POST', body: JSON.stringify({ share: sh }) }).then(r => r.ok);
+    return fetch('/api/share' + qs(), { method: 'POST', body: JSON.stringify({ share: sh }) }).then(r => r.ok);
   }
   function renderMe() {
     const el = $('#char'), c = data.card, box = meBox();
+    const hbChanged = CharSheet.setHomebrew(data.homebrew || {});
     if (!c) {
       if (sheet) { sheet.destroy(); sheet = null; sheetFor = null; }
       el.innerHTML = `<div class="card"><div class="pcname">${esc(me || '')}</div><p style="color:var(--dim)">Ask the DM to add your character to the party in their Settings. Then your character sheet appears here.</p></div>`;
@@ -390,6 +423,7 @@
     } else {
       const incoming = JSON.stringify(c.model);
       if (incoming !== lastIncoming && Date.now() - sheetSent > 2500) { lastIncoming = incoming; sheet.set(c.model, liveOf(c)); }
+      else if (hbChanged) sheet.set(sheet.get(), liveOf(c));
       else sheet.set(sheet.get(), liveOf(c));
     }
     drawTokenCard();
@@ -401,7 +435,7 @@
     const fresh = list.filter(e => !feedSeen.has(e.id));
     list.forEach(e => feedSeen.add(e.id));
     if (!feedPrimed) { feedPrimed = true; return; }
-    const e = fresh.find(x => x.kind !== 'card');
+    const e = fresh.find(x => x.kind !== 'card' && x.kind !== 'hp');
     if (!e) return;
     document.querySelectorAll('.rollpop').forEach(x => x.remove());
     const pop = document.createElement('div');
@@ -441,7 +475,7 @@
     cv.addEventListener('pointerup', () => (last = null));
     box.querySelector('[data-a=send]').addEventListener('click', () => {
       $('#toksaved').textContent = 'Sending…';
-      fetch('/api/token?player=' + encodeURIComponent(me), { method: 'POST', body: JSON.stringify({ dataUrl: cv.toDataURL('image/png') }) })
+      fetch('/api/token' + qs(), { method: 'POST', body: JSON.stringify({ dataUrl: cv.toDataURL('image/png') }) })
         .then(r => { $('#toksaved').textContent = r.ok ? 'Sent to the DM ✓' : 'That picture didn\'t work, try another'; tokDirty = false; })
         .catch(() => { $('#toksaved').textContent = 'Not sent — reconnecting'; });
     });
@@ -467,7 +501,7 @@
 
   function loadNotes() {
     if (notesLoaded || !me) return;
-    fetch('/api/notes?player=' + encodeURIComponent(me)).then(r => r.text()).then(t => { const ta = document.querySelector('#mebox .mynotes'); if (ta && !ta.value) ta.value = t; notesLoaded = true; }).catch(() => {});
+    fetch('/api/notes' + qs()).then(r => r.text()).then(t => { const ta = document.querySelector('#mebox .mynotes'); if (ta && !ta.value) ta.value = t; notesLoaded = true; }).catch(() => {});
   }
 
   function renderTurns() {
@@ -562,9 +596,8 @@
   // Show the tour the first time a player joins on this phone.
   const maybeTour = () => { if (!display && me && !store.get('dm.tour.done') && tourStep < 0) setTimeout(startTour, 600); };
 
-  connect();
-  maybeTour();
-  if (!display && !me) { $('#app').hidden = true; $('#join').hidden = false; }
+  // Check the saved join code before connecting.
+  fetch('/api/join' + qs()).then(r => { if (r.status === 204) start(); else showCode(true); }).catch(() => start());
 })();
 </script>
 </body>

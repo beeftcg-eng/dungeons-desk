@@ -23,6 +23,7 @@ let config = { vault: path.join(docsDir(), 'Dungeons Desk Vault'), port: 7777, c
 let win = null;
 let server = null;
 
+const newJoinCode = () => String(require('crypto').randomInt(0, 1_000_000)).padStart(6, '0');
 function loadConfig() {
   try { config = { ...config, ...JSON.parse(fs.readFileSync(CONFIG_PATH(), 'utf8')) }; } catch { /* first run */ }
 }
@@ -378,13 +379,15 @@ function registerIpc() {
 
   ipcMain.handle('server:info', async () => {
     const urls = getLanUrls();
-    const qr = urls[0] ? await QRCode.toDataURL(urls[0], { margin: 1, width: 260 }) : null;
-    return { port: server.port, urls, qr, players: server.playerList() };
+    // The QR code carries the join code, so scanning it is all a player needs to do.
+    const qr = urls[0] ? await QRCode.toDataURL(`${urls[0]}?code=${server.code}`, { margin: 1, width: 260 }) : null;
+    return { port: server.port, urls, qr, code: server.code, players: server.playerList() };
   });
+  ipcMain.handle('server:newCode', () => { config.joinCode = newJoinCode(); saveConfig(); server.setCode(config.joinCode); return config.joinCode; });
   ipcMain.handle('server:publish', (_e, pub) => { server.publish(pub); return true; });
   ipcMain.handle('server:openDisplay', () => {
     const dw = new BrowserWindow({ width: 900, height: 700, title: 'Player Display', autoHideMenuBar: true });
-    dw.loadURL(`http://127.0.0.1:${server.port}/?display=1`);
+    dw.loadURL(`http://127.0.0.1:${server.port}/?display=1&code=${server.code}`);
   });
   // Read-only lookups in the Open5e library (open-licensed 5e content), done here so the renderer CSP stays strict.
   ipcMain.handle('web:open5e', async (_e, pathAndQuery) => {
@@ -466,6 +469,9 @@ app.whenReady().then(async () => {
   server = new PlayerServer({ staticDir: path.join(__dirname, 'player'), sharedDir: path.join(__dirname, 'shared'), mediaDir: mediaDir(), vaultDir: () => config.vault });
   server.onPlayers = list => win && win.webContents.send('server:players', list);
   server.onAction = action => win && win.webContents.send('player:action', action);
+  // The join code stays the same between sessions so phones that joined before can reconnect.
+  if (!/^\d{6}$/.test(String(config.joinCode || ''))) { config.joinCode = newJoinCode(); saveConfig(); }
+  server.code = config.joinCode;
   config.port = await server.listen(config.port);
   registerIpc();
   createWindow();

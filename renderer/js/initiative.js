@@ -158,6 +158,48 @@ window.Initiative = (() => {
     });
   }
 
+  // ---------- From players' character sheets (renderer/js/sheets.js) ----------
+  // Each returns true when it changed the tracker.
+  const pcByName = (name) => ini().combatants.find(c => c.kind === 'pc' && c.name.toLowerCase() === String(name || '').toLowerCase());
+  // Fills in a player's initiative, unless the fight is already under way with their initiative set.
+  function playerInit(name, total) {
+    const c = pcByName(name);
+    if (!c || (ini().active && c.init != null)) return false;
+    act(`${c.name} rolled ${total} for initiative`, () => { c.init = total; sortList(); });
+    return true;
+  }
+  // 2024 rules: 10 or higher succeeds, a 1 counts as two failures, a 20 brings them back with 1 HP.
+  function playerDeathSave(name, roll) {
+    const c = pcByName(name);
+    if (!c || !ini().active || c.hp !== 0 || c.dead) return false;
+    act('', () => {
+      const d = c.deathSaves = c.deathSaves || { s: 0, f: 0 };
+      if (roll >= 20) { c.hp = 1; c.deathSaves = null; c.defeated = false; log(`${c.name} rolled a 20 on a death save and is back up with 1 HP`); return; }
+      if (roll <= 1) d.f = Math.min(3, d.f + 2); else if (roll >= 10) d.s = Math.min(3, d.s + 1); else d.f = Math.min(3, d.f + 1);
+      if (d.f >= 3) { c.dead = true; c.defeated = true; log(`☠ ${c.name} rolled ${roll} on a death save and has died`); }
+      else if (d.s >= 3) log(`${c.name} rolled ${roll} on a death save and is stable`);
+      else log(`${c.name} rolled ${roll} on a death save (${d.s}✓ ${d.f}✗)`);
+    });
+    return true;
+  }
+  function playerConcentration(name, on) {
+    const c = pcByName(name);
+    if (!c) return false;
+    const has = conds(c).some(x => x.name === 'Concentrating');
+    if (on === has) return false;
+    act(`${c.name} ${on ? 'is concentrating' : 'stopped concentrating'}`, () => {
+      c.conditions = on ? [...conds(c), { name: 'Concentrating', rounds: null }] : conds(c).filter(x => x.name !== 'Concentrating');
+      if (!on) c.concDC = null;
+    });
+    return true;
+  }
+  function playerHp(name, amount, heal) {
+    const c = pcByName(name);
+    if (!c || c.hp == null) return false;
+    applyHp(c, (heal ? '+' : '') + amount);
+    return true;
+  }
+
   // ---------- Encounter builder ----------
   const enc = () => (Store.get().encounter = Store.get().encounter || { items: [], size: null, level: null });
   function partyInfo() {
@@ -457,7 +499,10 @@ ${srd.length ? '\n## Stat Blocks\n\n' + srd.map(i => Statblock.fence(i.sb)).join
         info.urls.length ? [
           h('p', 'Players on the same Wi-Fi scan this or open:'),
           info.qr ? h('img.qr', { src: info.qr }) : null,
-          h('div.url-list', info.urls.map(u => h('code', { onclick: () => U.copy(u), title: 'Click to copy' }, u)))]
+          h('div.url-list', info.urls.map(u => h('code', { onclick: () => U.copy(u), title: 'Click to copy' }, u))),
+          h('div.join-code', h('span', 'Join code'), h('b', info.code), h('button.small', { title: 'Make a new code. Every phone is disconnected and has to rejoin.',
+            onclick: async () => { if (await U.confirm('New join code?', 'Every connected phone is disconnected. Players rejoin by scanning the QR code again or typing the new code.')) { await dm.server.newCode(); refreshPhone(); } } }, 'New code')),
+          h('p.hint', 'Scanning the QR code joins straight away. Anyone typing the address is asked for the join code once.')]
           : h('p', 'No network connection found. Connect this computer to Wi-Fi/LAN to share with phones.'),
         h('h4', `Connected (${info.players.filter(p => p.online).length})`),
         info.players.length ? h('div.player-list', info.players.map(p => h('div', h('span.dot' + (p.online ? '.on' : '')), ' ', p.name))) : h('p.dim', 'Nobody yet.'),
@@ -469,5 +514,5 @@ ${srd.length ? '\n## Stat Blocks\n\n' + srd.map(i => Statblock.fence(i.sb)).join
     });
   }
 
-  return { mount, addFromStatblock, add, addToEncounter, loadEncounterNote, onShow: () => { if (tab === 'tracker') drawSide(); else drawBuilder(); }, condLabel, conds };
+  return { mount, addFromStatblock, add, addToEncounter, loadEncounterNote, playerInit, playerDeathSave, playerConcentration, playerHp, onShow: () => { if (tab === 'tracker') drawSide(); else drawBuilder(); }, condLabel, conds };
 })();

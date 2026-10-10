@@ -19,6 +19,13 @@ Try it on [[Ambush at the Old Bridge]] if you have the example notes.
 - **Concentration**: damage to a creature that's Concentrating shows the save DC.
 - **Death saves** appear automatically when a player character drops to 0 HP.
 - 👁 hides a creature from players' phones, and ☠ marks it defeated.
+
+### From players' phones
+Players with a character sheet (see [[4 Players' Phones]]) can do some of this for you:
+- **Initiative**: when they roll initiative on their sheet, it fills in their place in the turn order.
+- **Death saves**: a death save rolled on the phone marks the success or failure. A 1 counts as two failures, and a 20 brings them back with 1 HP.
+- **Damage and healing**: during a fight they tap their HP and report "I took 7 damage". It shows in your 📣 player feed with an **Apply** button, so HP only changes when you say so.
+- **Concentration**: casting a concentration spell marks them Concentrating, and ending it removes the condition.
 - When it's a monster's turn, its **stat block** appears on the right. 📜 pins any creature's stat block there.
 
 ## Dice 🎲
