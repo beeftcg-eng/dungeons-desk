@@ -1,6 +1,6 @@
 {
   "name": "dungeons-desk",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Dungeons Desk: a desktop toolkit for Dungeon Masters",
   "main": "main.js",
   "scripts": {
@@ -38,7 +38,7 @@
   "build": {
     "appId": "com.beeftcg.dungeonsdesk",
     "productName": "Dungeons Desk",
-    "copyright": "Copyright \u00a9 2026 beeftcg-eng",
+    "copyright": "Copyright © 2026 beeftcg-eng",
     "directories": {
       "buildResources": "build",
       "output": "dist"
