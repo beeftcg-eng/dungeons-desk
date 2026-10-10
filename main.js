@@ -444,7 +444,12 @@ protocol.registerSchemesAsPrivileged([{ scheme: 'vault', privileges: { standard:
 app.setName('Dungeons Desk');
 if (process.platform === 'linux') app.setDesktopName('dungeons-desk.desktop'); // match the launcher so the dock shows our icon
 
+// Only one copy may run: two would fight over the same campaign files and player port.
+if (!app.requestSingleInstanceLock()) app.quit();
+app.on('second-instance', () => { if (win) { if (win.isMinimized()) win.restore(); win.show(); win.focus(); } });
+
 app.whenReady().then(async () => {
+  if (!app.hasSingleInstanceLock()) return;
   loadConfig();
   saveConfig();
   ensureVault();
