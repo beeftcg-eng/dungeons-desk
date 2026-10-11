@@ -24,6 +24,14 @@ window.App = (() => {
     Dice.mount();
     Sheets.mount();
     $$('#rail button[data-view]').forEach(b => b.addEventListener('click', () => show(b.dataset.view)));
+    // Ctrl+1…9 jump to the rail's views in order; Ctrl+, opens Settings.
+    const keyFor = (view, i) => view === 'settings' ? 'Ctrl+,' : i < 9 ? `Ctrl+${i + 1}` : null;
+    const views = $$('#rail button[data-view]').map((b, i) => { const k = keyFor(b.dataset.view, i); if (k) b.title += ` (${k})`; return b.dataset.view; });
+    document.addEventListener('keydown', (e) => {
+      if (!e.ctrlKey || e.altKey || e.shiftKey || e.metaKey) return;
+      const view = e.key === ',' ? 'settings' : /^[1-9]$/.test(e.key) ? views[e.key - 1] : null;
+      if (view) { e.preventDefault(); show(view); }
+    });
     $('#campaign-btn').addEventListener('click', Campaigns.open);
     Campaigns.refreshRail();
     show(localStorage.getItem('app.view') || 'notes');
