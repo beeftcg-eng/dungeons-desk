@@ -77,7 +77,7 @@ There is no build step, bundler or TypeScript. Edit the files and restart the ap
 
 ## Testing
 
-`npm test` runs `scripts/test-charsheet.js`: the character sheet rules checked against hand-worked characters. Add a case there when you change `derive()`. For everything else there are no unit tests; use the smoke harness, which screenshots every view and logs console errors. **Always use a throwaway HOME** so it never touches the real vault or config:
+`npm test` runs `scripts/test-charsheet.js` (the character sheet rules checked against hand-worked characters; add a case there when you change `derive()`) and `scripts/test-server.js` (`PlayerServer` on a real port with throwaway folders: join codes and guess throttling, `viewFor()` filtering, player action validation and rate limits, notes, and path traversal; add a case there when you change `server.js`). The release workflow runs `npm test` before building. For everything else there are no unit tests; use the smoke harness, which screenshots every view and logs console errors. **Always use a throwaway HOME** so it never touches the real vault or config:
 
 ```bash
 S=$(mktemp -d); mkdir -p $S/home $S/shots
@@ -108,5 +108,5 @@ If the real app is already running on port 7777, the smoke run uses the next fre
 ## Environment
 
 - Fedora Atomic (`/home` → `/var/home`). The user's own launcher is `~/.local/share/applications/dungeons-desk.desktop`. It runs the **source folder** with `node_modules/electron/dist/electron` from `/var/home/beef/Desktop/DmTools`, so it always runs the latest code (and it can't self-update). Don't move the folder without updating the launcher. To restart it after changes, run `kill` on the old process, then `setsid -f gtk-launch dungeons-desk`. Icons are installed in `~/.local/share/icons/hicolor/*/apps/dungeons-desk.png`.
-- Electron 33. Its `npm install` postinstall extraction silently fails on this machine (Node 26). The README has the manual unzip fix.
+- Electron 44. Its `npm install` postinstall can be skipped on this machine (npm's `allowScripts` list must name the exact electron version); if `node_modules/electron/dist/` is missing, run `node_modules/.bin/electron --version` once and it downloads the binary. The README has the manual unzip fix.
 - Runtime dependencies are `marked@12` (UMD build loaded in the renderer), `js-yaml@4` and `qrcode` (main process only).

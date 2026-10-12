@@ -9,7 +9,7 @@ fs.writeFileSync(OUT + '/log.txt', '');
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 let started = false;
 app.on('browser-window-created', (_, w) => {
-  w.webContents.on('console-message', (e, level, msg, line, src) => { if (level >= 2) log('CONSOLE', level, msg, src + ':' + line); });
+  w.webContents.on('console-message', (e) => { if (e.level === 'warning' || e.level === 'error') log('CONSOLE', e.level, e.message, e.sourceId + ':' + e.lineNumber); });
   w.webContents.on('preload-error', (e, p, err) => log('PRELOAD', err));
   if (started) return; started = true;
   w.webContents.once('did-finish-load', async () => {
