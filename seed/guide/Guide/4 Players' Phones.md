@@ -45,6 +45,8 @@ To bring that character into your game:
 - **They import it.** If they're already in the party, they use **👤 Me → 📝 Notes → ⇩ Import my sheet**.
 - **A link.** **💾 File → 🔗 Share link** makes a link with the whole character inside it. Tapping it opens the character in the sheet app on any phone, and nothing is uploaded. To hand out a pre-made character, open its sheet here and click **🔗 Link**.
 
+**☁ Sync your characters** (on the sheet app's character list) signs in with a Pawmodoro account, so characters follow a player to every phone and survive a lost one. If the same character was changed on two phones before they synced, both versions are kept.
+
 The sheet app also keeps a **🎲 Rolls** log for each character, shows a **portrait** (tap the picture spot in ✏ Edit), lists every character's AC, HP and passive Perception, and reminds players to save a copy now and then.
 
 It works the other way too. **⇧ Export** in a sheet window (or **⬇ Save my sheet** on their phone) gives them a file to open in the character sheet app between sessions.

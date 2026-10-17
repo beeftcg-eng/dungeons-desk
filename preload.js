@@ -12,13 +12,14 @@ contextBridge.exposeInMainWorld('dm', {
   tokens: { exportFiles: call('tokens:exportFiles') },
   history: { list: call('history:list'), read: call('history:read'), snapshot: call('history:snapshot') },
   backup: { now: call('backup:now'), info: call('backup:info'), reveal: call('backup:reveal') },
-  attach: { save: call('attach:save'), list: call('attach:list') },
+  attach: { save: call('attach:save'), list: call('attach:list'), read: call('attach:read'), write: call('attach:write') },
+  cloud: { load: call('cloud:load'), save: call('cloud:save') },
   notes: {
     list: call('notes:list'), readAll: call('notes:readAll'), read: call('notes:read'), write: call('notes:write'),
     exists: call('notes:exists'), delete: call('notes:delete'), rename: call('notes:rename'), mkdir: call('notes:mkdir'),
   },
   state: { load: call('state:load'), save: call('state:save') },
-  media: { save: call('media:save') },
+  media: { save: call('media:save'), list: call('media:list'), read: call('media:read'), write: call('media:write') },
   file: { savePng: call('file:savePng') },
   print: { html: call('print:html') },
   server: {

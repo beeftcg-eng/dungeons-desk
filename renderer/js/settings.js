@@ -74,6 +74,7 @@ window.Settings = (() => {
             h('button', { onclick: async () => { const n = await dm.vault.addSeed('examples'); await Notes.refresh(); toast(n ? `Added ${n} example notes` : 'The examples are already here'); } }, '🧪 Add example notes'),
             h('span.dim.small', 'Never overwrites your notes.')),
           backupBox),
+        CloudSync.card(),
         appearanceCard(),
         updatesCard(),
         h('div.card',

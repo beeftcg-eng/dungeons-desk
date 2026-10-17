@@ -84,6 +84,12 @@ Phones can only view things, apart from each player's own character sheet and no
 
 Both work offline once opened, and update themselves.
 
+**Cloud sync (optional).** Sign in with a Pawmodoro account (the same one Beef's Brewhouse uses) to sync:
+- **Characters**, between phones, from the sheet app's list.
+- **Campaigns**, between the desktop app, the phone app and other computers, from **⚙ Settings → Cloud sync**: notes, app state and images.
+
+Nothing is lost when two devices edit the same thing. A note keeps both versions, and the app state merges part by part. The server side (the `dmdesk_*` tables and functions, and a private `dmdesk` storage bucket) lives in the Pawmodoro project's `supabase/schema.sql`.
+
 ## Files
 
 - Notes are plain `.md` files in the vault, so you can back them up, sync them, or open the vault in Obsidian.

@@ -44,6 +44,7 @@ window.App = (() => {
     show(localStorage.getItem('app.view') || 'notes');
     publishToPlayers();
     setTimeout(Campaigns.remindBackup, 4000);
+    CloudSync.init();
     // Let the DM know when a new version is ready on GitHub.
     dm.update.onStatus((st) => { if (st.state === 'available') U.toast(`Update v${st.version} available: Settings → Updates`); if (st.state === 'ready') U.toast('Update downloaded: restart from Settings → Updates'); });
   }

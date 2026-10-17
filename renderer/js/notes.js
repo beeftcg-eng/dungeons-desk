@@ -623,5 +623,14 @@ window.Notes = (() => {
     : /enemy|rival|hate|hunt|nemesis|betray|feud|kill|owes/i.test(label) ? '#d9443a'
     : /work|serve|member|leader|lead|boss|employ|agent|spy|sworn|loyal|follower/i.test(label) ? '#5fb3e8' : '#b9b2c9';
 
-  return { mount, open, create, refresh, flush: saveNow, playerWiki, shareOf, relationsIn, relColor, notesCache: () => cache, withStatblocks, list, resolve, uniquePath };
+  // Cloud sync changed these notes on disk: reload the list, and the open note if it was one of them
+  // (unless it's being edited, in which case the next save wins and the sync keeps the other version).
+  async function syncedChanges(paths) {
+    await refresh();
+    if (!current || !paths.includes(current) || dirty) return;
+    if (cache.has(current)) { els.editor.value = cache.get(current); renderPreview(); renderInfo(); }
+    else { current = null; showEditor(false); }
+  }
+
+  return { mount, open, create, refresh, syncedChanges, flush: saveNow, playerWiki, shareOf, relationsIn, relColor, notesCache: () => cache, withStatblocks, list, resolve, uniquePath };
 })();

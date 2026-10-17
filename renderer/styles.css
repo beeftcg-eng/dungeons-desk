@@ -541,6 +541,11 @@ td .src { margin-left: 8px; }
 .sheet-btn { padding: 4px 9px; }
 :root[data-mode=light] .cs-chip.cs-cond { background: #ead9f7; color: #4a2370; }
 
+/* ---------- Cloud sync card (cloud-sync.js) ---------- */
+.cloud-signin { display: flex; flex-direction: column; gap: 8px; max-width: 360px; }
+.cloud-list .row { margin: 4px 0; }
+.err-text { color: #e57373; }
+
 /* ---------- Session view (session.js) ---------- */
 .session-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; align-items: start; }
 .session-fight { grid-row: span 3; }

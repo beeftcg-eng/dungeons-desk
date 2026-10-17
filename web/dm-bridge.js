@@ -304,6 +304,13 @@ started: ${new Date().toISOString().slice(0, 10)}
         return 'Attachments/' + file;
       }),
       list: r(async () => [...urls.attach.keys()]),
+      read: r(async (rel) => { const b = await get('blobs', [cid, 'attach', safe(rel)]); if (!b) throw new Error('Not found'); return toDataUrl(b.blob); }),
+      write: r(async (rel, dataUrl) => { rel = safe(rel); if (!IMAGE_EXT.test(rel)) throw new Error('Not an image'); await saveBlob('attach', rel, dataUrl); return true; }),
+    },
+    // What cloud sync last synced for the open campaign (the desktop app keeps it in .dmtools/cloud.json).
+    cloud: {
+      load: r(async () => (await campaign()).cloud || null),
+      save: r(async (data) => { const c = await campaign(); if (data == null) delete c.cloud; else c.cloud = JSON.parse(JSON.stringify(data)); await put('campaigns', c); return true; }),
     },
     notes: {
       list: r(async () => {
@@ -352,6 +359,9 @@ started: ${new Date().toISOString().slice(0, 10)}
         await saveBlob('media', name, dataUrl);
         return name;
       }),
+      list: r(async () => [...urls.media.keys()]),
+      read: r(async (name) => { const b = await get('blobs', [cid, 'media', String(name).split('/').pop()]); if (!b) throw new Error('Not found'); return toDataUrl(b.blob); }),
+      write: r(async (name, dataUrl) => { name = String(name).split('/').pop(); if (!/\.(png|jpe?g|gif|webp)$/i.test(name)) throw new Error('Unsupported image'); await saveBlob('media', name, dataUrl); return true; }),
     },
     file: { savePng: async (dataUrl, defaultName) => { download(toBlob(dataUrl), defaultName || 'image.png'); return defaultName || 'image.png'; } },
     print: { html: (html, mode) => printHtml(html).then(() => mode === 'pdf' ? null : true) }, // Save as PDF is in the print sheet

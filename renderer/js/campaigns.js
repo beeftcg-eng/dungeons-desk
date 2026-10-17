@@ -5,6 +5,7 @@ window.Campaigns = (() => {
   // Save anything pending, point the app at another vault, then reload so every tool starts fresh.
   async function switchTo(fn, openNote) {
     await Notes.flush();
+    if (window.CloudSync) await CloudSync.syncNow().catch(() => {});
     await Store.saveNow();
     try { await fn(); } catch (e) { toast(String(e.message).replace(/^.*Error: /, ''), 'err'); return false; }
     if (openNote) localStorage.setItem('notes.last', openNote); else localStorage.removeItem('notes.last');
@@ -91,5 +92,5 @@ window.Campaigns = (() => {
     if (el) { el.textContent = info.currentName; el.parentElement.title = `Campaign: ${info.currentName}\nClick to switch or start a new one`; }
   }
 
-  return { open, newCampaign, refreshRail, exportFile, importFile, remindBackup };
+  return { open, newCampaign, refreshRail, exportFile, importFile, remindBackup, switchTo };
 })();

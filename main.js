@@ -360,6 +360,34 @@ function registerIpc() {
   });
   ipcMain.handle('notes:mkdir', (_e, rel) => { fs.mkdirSync(safe(rel), { recursive: true }); return true; });
 
+  // Cloud sync (renderer/js/cloud-sync.js) keeps what it last synced in .dmtools/cloud.json, and reads and writes
+  // images by name.
+  const cloudPath = () => path.join(metaDir(), 'cloud.json');
+  ipcMain.handle('cloud:load', () => { try { return JSON.parse(fs.readFileSync(cloudPath(), 'utf8')); } catch { return null; } });
+  ipcMain.handle('cloud:save', (_e, data) => {
+    fs.mkdirSync(metaDir(), { recursive: true });
+    if (data == null) { fs.rmSync(cloudPath(), { force: true }); return true; }
+    fs.writeFileSync(cloudPath() + '.tmp', JSON.stringify(data)); fs.renameSync(cloudPath() + '.tmp', cloudPath());
+    return true;
+  });
+  const imgMime = (f) => ({ jpg: 'jpeg', svg: 'svg+xml' }[path.extname(f).slice(1).toLowerCase()] || path.extname(f).slice(1).toLowerCase());
+  const readImage = (full) => `data:image/${imgMime(full)};base64,${fs.readFileSync(full).toString('base64')}`;
+  const writeImage = (full, dataUrl) => {
+    const m = /^data:image\/[\w.+-]+;base64,(.+)$/.exec(String(dataUrl));
+    if (!m) throw new Error('Not an image');
+    fs.mkdirSync(path.dirname(full), { recursive: true });
+    fs.writeFileSync(full, Buffer.from(m[1], 'base64'));
+    return true;
+  };
+  ipcMain.handle('media:list', () => { try { return fs.readdirSync(mediaDir()).filter(f => /\.(png|jpe?g|gif|webp)$/i.test(f)); } catch { return []; } });
+  ipcMain.handle('media:read', (_e, name) => readImage(path.join(mediaDir(), path.basename(String(name)))));
+  ipcMain.handle('media:write', (_e, name, dataUrl) => {
+    if (!/\.(png|jpe?g|gif|webp)$/i.test(String(name))) throw new Error('Unsupported image');
+    return writeImage(path.join(mediaDir(), path.basename(String(name))), dataUrl);
+  });
+  ipcMain.handle('attach:read', (_e, rel) => { const full = safe(rel); if (!IMAGE_EXT.test(full)) throw new Error('Not an image'); return readImage(full); });
+  ipcMain.handle('attach:write', (_e, rel, dataUrl) => { const full = safe(rel); if (!IMAGE_EXT.test(full)) throw new Error('Not an image'); return writeImage(full, dataUrl); });
+
   ipcMain.handle('state:load', () => {
     try { return JSON.parse(fs.readFileSync(statePath(), 'utf8')); } catch { return {}; }
   });

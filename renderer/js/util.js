@@ -150,6 +150,8 @@ window.Store = (() => {
   const save = U.debounce(saveNow, 400);
   return {
     async load() { state = { ...defaults(), ...(await window.dm.state.load()) }; listeners.forEach(f => f(state)); return state; },
+    // Cloud sync: swap in a state that arrived from another device, then redraw and save it.
+    replace(s) { state = { ...defaults(), ...s }; listeners.forEach(f => f(state)); return saveNow(); },
     get: () => state,
     save,
     saveNow,

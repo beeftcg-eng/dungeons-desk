@@ -21,6 +21,13 @@ Dungeons Desk also runs on a phone at **beeftcg-eng.github.io/dungeons-desk**: t
 - It works offline once it has been opened, and it updates itself.
 - If a campaign has changed and hasn't been exported for a week, the phone app offers to export it when you open it. Phones sometimes clear app data, so it's worth doing.
 
+## Cloud sync ☁
+**⚙ Settings → Cloud sync** keeps a campaign in step between this app and the phone app, or another computer. Sign in with a Pawmodoro account (the same one Beef's Brewhouse uses), or make one right there.
+- **☁ Sync this campaign** uploads it: notes, the party, initiative, handouts, maps, tokens and images. After that it syncs by itself every minute or so while the app is open, and before you switch campaigns.
+- On another device, sign in and pick it under **In your cloud → ⬇ Get it on this device**.
+- **Edited in two places before they synced?** Nothing is lost. A note keeps this device's version, and the other one is saved next to it as *Name (other device date).md*. For the party, initiative, maps and the rest, each part keeps whichever side changed it.
+- **Stop syncing** keeps everything where it is. **Delete cloud copy** removes it from the cloud, but every device keeps its own copy.
+
 ## Backups 💾
 On this computer, a full copy of the campaign is saved **once a day** in *Documents/Dungeons Desk Backups* (the last 14 are kept). Go to **⚙ Settings → Back up now** to make one any time. Each note also has its own 🕘 version history. On the phone app, back up by exporting a campaign file.
 
