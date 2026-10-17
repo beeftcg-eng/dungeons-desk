@@ -6,7 +6,7 @@
 window.Cloud = (() => {
   const URL_ = 'https://cinxclbsgamdprftcbek.supabase.co';
   const KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNpbnhjbGJzZ2FtZHByZnRjYmVrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk1NTc4OTIsImV4cCI6MjEwNTEzMzg5Mn0.1hpyBV2ZO3MeQUSnx3K5-XG6BbzY-gXb-4uG6Ls7Fr0';
-  const BUCKET = 'dmdesk';
+  const BUCKET = 'dmdesk', TABLE_BUCKET = 'dmdesk-table';
   const STORE = 'dd.cloud.session';
   const listeners = new Set();
 
@@ -70,20 +70,26 @@ window.Cloud = (() => {
   }
   const headers = async (extra) => ({ apikey: KEY, Authorization: 'Bearer ' + await token(), ...extra });
 
-  // A function in Pawmodoro's schema (the dmdesk_* ones).
-  async function rpc(name, args = {}) {
-    const res = await request('/rest/v1/rpc/' + name, { method: 'POST', headers: await headers({ 'Content-Type': 'application/json' }), body: JSON.stringify(args) });
+  // A function in Pawmodoro's schema (the dmdesk_* ones). anonRpc is for players at an online table, who have
+  // no account: those functions are granted to anon and check the table's code themselves.
+  const rpc = (name, args) => call(name, args, headers({ 'Content-Type': 'application/json' }));
+  const anonRpc = (name, args) => call(name, args, Promise.resolve({ apikey: KEY, Authorization: 'Bearer ' + KEY, 'Content-Type': 'application/json' }));
+  async function call(name, args = {}, hdrs) {
+    const res = await request('/rest/v1/rpc/' + name, { method: 'POST', headers: await hdrs, body: JSON.stringify(args) });
     if (res.ok) return res.status === 204 ? null : res.json();
     const j = await res.json().catch(() => ({}));
     if (res.status === 404 || j.code === 'PGRST202') throw new CloudError('Cloud sync isn\'t set up on the server yet.', 'setup');
-    if (res.status === 401) { setSession(null); throw new CloudError('Signed out. Sign in again to keep syncing.', 'auth'); }
+    if (res.status === 401 && session) { setSession(null); throw new CloudError('Signed out. Sign in again to keep syncing.', 'auth'); }
     throw new CloudError(j.message || `The cloud said no (${res.status}).`, 'server');
   }
 
-  // Images in the private bucket, always under the user's own id: <user>/<rest>.
+  // Images in a bucket, always under the user's own id: <user>/<rest>. `storage` is the private one for synced
+  // campaigns; `tableStorage` is the public one for online tables (publicUrl() is what players load).
   const own = (rest) => `${user().id}/${rest}`;
   const enc = (p) => p.split('/').map(encodeURIComponent).join('/');
-  const storage = {
+  const storage = bucketOf(BUCKET);
+  const tableStorage = { ...bucketOf(TABLE_BUCKET), publicUrl: (rest) => `${URL_}/storage/v1/object/public/${TABLE_BUCKET}/${enc(own(rest))}` };
+  function bucketOf(BUCKET) { return {
     async upload(rest, blob) {
       const res = await request(`/storage/v1/object/${BUCKET}/${enc(own(rest))}`, { method: 'POST', headers: await headers({ 'Content-Type': blob.type || 'application/octet-stream', 'x-upsert': 'true' }), body: blob });
       if (!res.ok) throw new CloudError(`Couldn't upload an image (${res.status}).`, 'server');
@@ -93,14 +99,14 @@ window.Cloud = (() => {
       if (!res.ok) throw new CloudError(`Couldn't download an image (${res.status}).`, 'server');
       return res.blob();
     },
-    // Names directly inside a folder (not recursive).
-    async list(folder) {
+    // Names of the files directly inside a folder (not recursive), or of its subfolders. '' is the user's own.
+    async list(folder, { folders = false } = {}) {
       const out = [];
       for (let offset = 0; ; offset += 1000) {
-        const res = await request(`/storage/v1/object/list/${BUCKET}`, { method: 'POST', headers: await headers({ 'Content-Type': 'application/json' }), body: JSON.stringify({ prefix: own(folder) + '/', limit: 1000, offset }) });
+        const res = await request(`/storage/v1/object/list/${BUCKET}`, { method: 'POST', headers: await headers({ 'Content-Type': 'application/json' }), body: JSON.stringify({ prefix: (folder ? own(folder) : user().id) + '/', limit: 1000, offset }) });
         if (!res.ok) throw new CloudError(`Couldn't list images (${res.status}).`, 'server');
         const page = await res.json();
-        page.filter(o => o.id).forEach(o => out.push(o.name));
+        page.filter(o => folders ? !o.id : o.id).forEach(o => out.push(o.name));
         if (page.length < 1000) return out;
       }
     },
@@ -110,8 +116,8 @@ window.Cloud = (() => {
         if (!res.ok) throw new CloudError(`Couldn't delete images (${res.status}).`, 'server');
       }
     },
-  };
+  }; }
 
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
-  return { URL: URL_, user, signIn, signUp, signOut, rpc, storage, uid, CloudError, onChange: (f) => listeners.add(f) };
+  return { URL: URL_, user, signIn, signUp, signOut, rpc, anonRpc, storage, tableStorage, uid, CloudError, onChange: (f) => listeners.add(f) };
 })();

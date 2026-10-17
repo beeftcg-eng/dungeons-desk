@@ -53,8 +53,19 @@ It works the other way too. **⇧ Export** in a sheet window (or **⬇ Save my s
 
 **🖥 Open player display window** (on the Initiative page) gives a big-screen view for a TV: the map and the turn order side by side.
 
+## Playing online 🌐
+Not everyone in the same room? Open an **online table** and players join from anywhere with a link, no shared Wi-Fi needed. It's on the **⏳ Initiative** page, under **📱 Players' phones → 🌐 Online table** (in the phone app too, so you can run a game from your phone). You need to be signed in to **☁ Cloud sync** (⚙ Settings), but players don't need an account.
+- **🌐 Open an online table** gives you a link (and a QR code on this computer). Send it to your players; they pick their character just like at the table.
+- They see exactly what a phone at the table sees, with the same tour, and they can do the same things: roll from their sheet, move their own token, ping, pick a token picture, send you their character file.
+- Their phones check for changes every second or two, so things arrive a moment later than on the Wi-Fi. Private notes stay on their phone.
+- The table stays open, with the same link, until you **Close** it, even if you close the app in between (players' phones just stop updating until you're back). **New link** makes a fresh one and the old link stops working.
+- The images players see (maps, tokens, handout pictures) are uploaded while the table is open and deleted when you close it. Pictures over 10 MB aren't sent.
+
+> [!warning] Keep the link to your group
+> The link is the key to the table: anyone who has it can join and see what players see. Make a **New link** if it gets out.
+
 > [!warning] Can't connect?
-> - The phone has to be on the **same Wi-Fi** as your computer.
+> - At the table, the phone has to be on the **same Wi-Fi** as your computer. Otherwise, use an online table (above).
 > - Asked for a code? It's under the QR code on the ⏳ Initiative page. If you made a **New code**, players have to scan again.
 > - On **Windows**, allow Dungeons Desk through the firewall when asked (choose *Private networks*).
 > - Some public or guest Wi-Fi networks block devices from talking to each other.

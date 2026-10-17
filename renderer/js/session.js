@@ -23,7 +23,15 @@ window.Session = (() => {
     els.page.innerHTML = '';
     els.page.append(
       h('header.page-head', h('h1', 'Session'), date ? h('span.dim', '📅 ', date) : null),
-      h('div.session-grid', fightCard(), diceCard(), partyCard(), pinsCard()));
+      h('div.session-grid', installCard(), fightCard(), diceCard(), partyCard(), pinsCard()));
+  }
+
+  // On the phone app: how to install it (web/install.js), made once and dropped when dismissed.
+  let installEl;
+  function installCard() {
+    if (!dm.isWeb || !window.Install) return null;
+    if (installEl === undefined) { installEl = null; Install.card({ app: 'dm', short: 'DM Desk', what: 'your campaigns' }).then(el => { installEl = el; if (el) refresh(); }); }
+    return installEl && !installEl.hidden ? installEl : null;
   }
 
   // ---------- The fight ----------

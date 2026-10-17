@@ -11,10 +11,14 @@
 // - The app state changed on both: merged per top-level key (party, initiative, maps…) against the last synced
 //   state; a key changed on both keeps this device's.
 // - Deleted on one side and changed on the other: the changed one comes back.
-// Images are only ever added (names are unique), never deleted by sync.
+// Images (names are unique) are copied to whichever side lacks them. One that was on both sides at the last sync
+// (link.media) and is now gone from one side was deleted there (🧹 Clean up images), so it's deleted on the other.
+// Each image is at most 10 MB; bigger ones stay on their device, and the app says so once.
+// The link belongs to one account (link.user). Signed in as someone else, nothing syncs until the DM signs back in
+// or moves the campaign to this account (a fresh cloud copy; the other account's copy stays as it was).
 window.CloudSync = (() => {
   const { h, toast } = U;
-  const STATE = '.dmtools/state.json', PENDING = 'dd.cloud.pending', MAX_IMAGE = 15 * 1024 * 1024;
+  const STATE = '.dmtools/state.json', PENDING = 'dd.cloud.pending', MAX_IMAGE = 10 * 1024 * 1024;
   let link = null, running = null, again = false, lastError = null, cardEl = null;
 
   // FNV-1a over the text, twice with different seeds: a cheap fingerprint to notice local changes.
@@ -171,17 +175,35 @@ window.CloudSync = (() => {
 
   async function syncImages(C) {
     let got = 0;
-    const known = new Set(link.media || []);
+    const known = new Set(link.media || []), tooBig = new Set(link.tooBig || []), big = [];
     const [remoteMedia, remoteAttach, localMedia, localAttach] = await Promise.all([
       Cloud.storage.list(`${C}/media`), Cloud.storage.list(`${C}/attach`), dm.media.list(), dm.attach.list()]);
-    const rm = new Set(remoteMedia), ra = new Set(remoteAttach.map(attachPath).filter(Boolean));
-    const up = async (rest, dataUrl) => { const blob = dataUrlToBlob(dataUrl); if (blob.size <= MAX_IMAGE) await Cloud.storage.upload(rest, blob); };
-    for (const n of localMedia) if (!rm.has(n)) { await up(`${C}/media/${n}`, await dm.media.read(n)); known.add('m:' + n); }
-    for (const p of localAttach) if (!ra.has(p)) { await up(`${C}/attach/${attachKey(p)}`, await dm.attach.read(p)); known.add('a:' + p); }
+    const rm = new Set(remoteMedia), ra = new Map(remoteAttach.map(k => [attachPath(k), k]).filter(([p]) => p));
     const lm = new Set(localMedia), la = new Set(localAttach);
-    for (const n of rm) if (!lm.has(n)) { await dm.media.write(n, await blobToDataUrl(await Cloud.storage.download(`${C}/media/${n}`))); known.add('m:' + n); got++; }
-    for (const p of ra) if (!la.has(p)) { await dm.attach.write(p, await blobToDataUrl(await Cloud.storage.download(`${C}/attach/${attachKey(p)}`))); known.add('a:' + p); got++; }
-    link.media = [...known];
+    // Gone from one side since the last sync: deleted there. An empty cloud with images we knew about looks more
+    // like a mistake than a clean-up, so then nothing is deleted here and everything goes back up.
+    if (rm.size || ra.size) {
+      for (const n of [...lm]) if (!rm.has(n) && known.has('m:' + n)) { await dm.media.delete(n); lm.delete(n); got++; }
+      for (const p of [...la]) if (!ra.has(p) && known.has('a:' + p)) { await dm.attach.delete(p); la.delete(p); got++; }
+      const gone = [];
+      for (const n of [...rm]) if (!lm.has(n) && known.has('m:' + n)) { gone.push(`${C}/media/${n}`); rm.delete(n); }
+      for (const [p, k] of [...ra]) if (!la.has(p) && known.has('a:' + p)) { gone.push(`${C}/attach/${k}`); ra.delete(p); }
+      if (gone.length) await Cloud.storage.remove(gone);
+    }
+    // New on one side: copied to the other.
+    const up = async (rest, dataUrl, label) => {
+      const blob = dataUrlToBlob(dataUrl);
+      if (blob.size > MAX_IMAGE) { if (!tooBig.has(label)) big.push(label.replace(/^[am]:(.*\/)?/, '')); tooBig.add(label); return false; }
+      await Cloud.storage.upload(rest, blob);
+      return true;
+    };
+    for (const n of lm) if (!rm.has(n) && await up(`${C}/media/${n}`, await dm.media.read(n), 'm:' + n)) rm.add(n);
+    for (const p of la) if (!ra.has(p) && await up(`${C}/attach/${attachKey(p)}`, await dm.attach.read(p), 'a:' + p)) ra.set(p, attachKey(p));
+    for (const n of rm) if (!lm.has(n)) { await dm.media.write(n, await blobToDataUrl(await Cloud.storage.download(`${C}/media/${n}`))); lm.add(n); got++; }
+    for (const [p, k] of ra) if (!la.has(p)) { await dm.attach.write(p, await blobToDataUrl(await Cloud.storage.download(`${C}/attach/${k}`))); la.add(p); got++; }
+    link.media = [...[...lm].filter(n => rm.has(n)).map(n => 'm:' + n), ...[...la].filter(p => ra.has(p)).map(p => 'a:' + p)];
+    link.tooBig = [...tooBig].filter(l => l.startsWith('m:') ? lm.has(l.slice(2)) : la.has(l.slice(2)));
+    if (big.length) toast(`Too big to sync (over 10 MB), so only on this device: ${big.join(', ')}`, 'err');
     return got;
   }
 
@@ -190,11 +212,17 @@ window.CloudSync = (() => {
     const u = Cloud.user(), name = (await dm.campaigns.list()).currentName;
     const id = Cloud.uid();
     await Cloud.rpc('dmdesk_save_campaign', { p_id: id, p_name: name });
-    link = { cloudId: id, user: u.id, name, since: 0, files: {}, media: [], base: null };
+    link = { cloudId: id, user: u.id, email: u.email, name, since: 0, files: {}, media: [], base: null };
     await save();
     toast('Uploading this campaign…');
     await syncNow();
     if (!lastError) toast('This campaign now syncs');
+  }
+  async function moveHere() {
+    if (!await U.confirm('Sync with this account', `Start syncing this campaign with ${Cloud.user().email} instead? It stops syncing with the other account.`)) return;
+    link = null;
+    await dm.cloud.save(null);
+    await start();
   }
   async function stop(remove) {
     if (remove) {
@@ -241,7 +269,11 @@ window.CloudSync = (() => {
       return;
     }
     cardEl.append(h('p', 'Signed in as ', h('b', u.email), ' ', h('button.small', { onclick: () => { Cloud.signOut(); } }, 'Sign out')));
-    if (link && link.user !== u.id) cardEl.append(h('p.dim', 'This campaign syncs with a different account.'));
+    if (link && link.user !== u.id) {
+      cardEl.append(h('p', '⚠ This campaign syncs with ', link.email ? h('b', link.email) : 'a different account', ', so it isn\'t syncing now. Sign in with that account to carry on, or move it to this one.'),
+        h('p.dim', 'Moving makes a fresh cloud copy in this account from what\'s on this device. The other account\'s copy stays as it was.'),
+        h('div.row', h('button', { onclick: () => moveHere().catch(e => toast(e.message, 'err')) }, '☁ Sync with this account instead')));
+    }
     if (linked()) {
       const when = link.lastSync ? new Date(link.lastSync).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : null;
       cardEl.append(
@@ -263,5 +295,5 @@ window.CloudSync = (() => {
     } catch (e) { list.innerHTML = ''; list.append(h('p.dim.small', e.message)); }
   }
 
-  return { init, card, syncNow, hash, merge };
+  return { init, card, syncNow, isLinked: linked, hash, merge };
 })();

@@ -8,6 +8,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const { viewFor } = require('./shared/view-for');
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.jpg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml' };
 
@@ -67,18 +68,8 @@ class PlayerServer {
     return [...this.known.values()].map(p => ({ name: p.name, online: online.has(p.name.toLowerCase()) }));
   }
 
-  // What a specific phone is allowed to see.
-  viewFor(client) {
-    const me = (client.player || '').toLowerCase();
-    const forMe = (to) => client.display ? to === 'all' : (to === 'all' || (Array.isArray(to) && to.some(n => n.toLowerCase() === me)));
-    const handouts = (this.pub.handouts || []).filter(h => forMe(h.to));
-    const wiki = (this.pub.wiki || []).filter(w => forMe(w.to));
-    const card = (this.pub.partyCards || []).find(c => c.name.toLowerCase() === me) || null;
-    const feed = client.display ? [] : (this.pub.feed || []).filter(f => (f.player || '').toLowerCase() === me);
-    const hb = this.pub.homebrew || {};
-    const homebrew = client.display ? null : { spells: (hb.spells || []).filter(x => forMe(x.to)), items: (hb.items || []).filter(x => forMe(x.to)) };
-    return { initiative: this.pub.initiative, handouts, wiki, map: this.pub.map, calendar: this.pub.calendar, party: this.pub.party || [], card, feed, homebrew, you: client.player || null };
-  }
+  // What a specific phone is allowed to see (shared/view-for.js, also used by online tables).
+  viewFor(client) { return viewFor(this.pub, client); }
 
   send(client) {
     client.res.write(`data: ${JSON.stringify(this.viewFor(client))}\n\n`);

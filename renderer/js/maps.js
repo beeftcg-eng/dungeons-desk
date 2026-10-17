@@ -372,5 +372,5 @@ window.Maps = (() => {
     document.addEventListener('mousedown', close, true);
   }
 
-  return { mount, onShow, playerView, rerender: render, tokenFor };
+  return { mount, onShow, playerView, playerAction, rerender: render, tokenFor };
 })();

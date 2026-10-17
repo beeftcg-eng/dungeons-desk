@@ -73,8 +73,10 @@ window.Settings = (() => {
             h('button', { onclick: async () => { const n = await dm.vault.addSeed('guide'); await Notes.refresh(); toast(n ? `Added ${n} guide notes, see the Guide folder` : 'The guide is already in this campaign'); if (n) Notes.open('Guide/0 Start Here.md'); } }, '📘 Add the how-to guide'),
             h('button', { onclick: async () => { const n = await dm.vault.addSeed('examples'); await Notes.refresh(); toast(n ? `Added ${n} example notes` : 'The examples are already here'); } }, '🧪 Add example notes'),
             h('span.dim.small', 'Never overwrites your notes.')),
+          h('div.row', h('button', { title: 'Find images no note, handout, map or token uses any more', onclick: () => Campaigns.cleanImages() }, '🧹 Clean up images')),
           backupBox),
         CloudSync.card(),
+        installCard(),
         appearanceCard(),
         updatesCard(),
         h('div.card',
@@ -90,6 +92,14 @@ window.Settings = (() => {
           h('h3', '📖 Credits'),
           h('p.dim.small', SRDREF.attribution),
           h('p.dim', 'Shortcuts: Ctrl+D dice roller · Ctrl+Z undo in initiative · Ctrl+N new note · Ctrl+O jump to note · Ctrl+E toggle reading view · Ctrl+S save · Space = next turn in initiative.')))));
+  }
+
+  // Phone app only: installing it (web/install.js). A placeholder until the card is ready.
+  function installCard() {
+    if (!dm.isWeb || !window.Install) return null;
+    const slot = h('div', { style: 'display:none' });
+    Install.card({ app: 'dm', short: 'DM Desk', what: 'your campaigns' }).then(el => { if (el) slot.replaceWith(el); });
+    return slot;
   }
 
   function appearanceCard() {

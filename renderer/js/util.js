@@ -202,13 +202,16 @@ window.publishToPlayers = U.debounce(() => {
       // The full character sheet (shared/charsheet.js); the player edits it on their phone.
       model: { name: p.name, cls: p.cls || '', level: p.level, ac: p.ac, hp: p.hp, initBonus: p.initBonus, sheet: p.sheet || null } };
   });
-  window.dm.server.publish({
+  const pub = {
     initiative, handouts, party: s.party.map(p => p.name).filter(Boolean), partyCards,
     map: window.Maps ? Maps.playerView() : null,
     calendar: window.Timeline ? Timeline.playerDate() : null,
     feed: window.Sheets ? Sheets.playerFeed() : [],
     homebrew: window.Sheets ? Sheets.playerHomebrew() : { spells: [], items: [] },
     ...(window.Notes ? Notes.playerWiki() : {}),
-  });
+  };
+  window.dm.server.publish(pub);
+  // An online table (renderer/js/online.js) gets the same, for phones joining over the internet.
+  if (window.Online) Online.publish(pub);
   if (window.Sheets) Sheets.refreshOpen();
 }, 150);

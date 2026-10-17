@@ -80,15 +80,17 @@ Phones can only view things, apart from each player's own character sheet and no
 **https://beeftcg-eng.github.io/dungeons-desk/** — open it in your phone's browser and **Add to Home Screen** (Safari: Share → Add to Home Screen; Chrome/Android: menu → Add to Home screen / Install app) for a home-screen icon that opens full screen. No app store is needed. It's a PWA (Progressive Web App) rather than an `.apk`, so the same link works on iPhone and Android. It has two parts, and each installs as its own icon:
 
 - **I'm a player** (`sheet/`): just a character sheet, with no DM or game needed. It's the same 2024-rules sheet as the Me tab: build a character, roll from it, level up, print it. Characters are saved on the phone. Characters can have a portrait and keep a roll log. **💾 File → 📤 Share file** or **🔗 Share link** sends one to the DM. A link carries the whole character, and nothing is uploaded. The DM adds a file with **⚙ Settings → Party → ⇩ Add from a character file**. At the table, a player can also tap **👤 Me → 📜 Send my character file to the DM**, which shows up in the DM's 📣 feed as **➕ Add to party**.
-- **I'm the DM** (`dm/`): the desktop app's tools in a phone layout. The bottom bar has 🎬 Session (the fight, quick dice, the party and pinned notes on one screen), Notes, Initiative and Map, and ⋯ More has the rest. Campaigns are kept on the phone. **⇧ Export** saves a campaign as one `.ddcampaign.json` file, and **⇩ Import a campaign file…** opens it, on either app, to move a campaign between the desktop and the phone. The phone app can't host the players' LAN game or the TV window; those need the desktop app.
+- **I'm the DM** (`dm/`): the desktop app's tools in a phone layout. The bottom bar has 🎬 Session (the fight, quick dice, the party and pinned notes on one screen), Notes, Initiative and Map, and ⋯ More has the rest. Campaigns are kept on the phone. **⇧ Export** saves a campaign as one `.ddcampaign.json` file, and **⇩ Import a campaign file…** opens it, on either app, to move a campaign between the desktop and the phone. The phone app can't host the players' LAN game or the TV window; those need the desktop app. It can open an online table, though.
 
-Both work offline once opened, and update themselves.
+Both work offline once opened, and update themselves. Each shows how to install it (an **Install** button on Chrome for Android, Share → Add to Home Screen on iPhone). If Chrome says the app is already installed and offers a shortcut, it's in the phone's app list.
+
+**Online tables.** When the group isn't on the same Wi-Fi, the DM opens one from **⏳ Initiative → 📱 Players' phones → 🌐 Online table** (desktop or phone app, signed in to cloud sync) and sends the players a link to `play/?t=…`. That's the same players' page as at the table, with each phone getting exactly what it would get on the LAN. Players need no account.
 
 **Cloud sync (optional).** Sign in with a Pawmodoro account (the same one Beef's Brewhouse uses) to sync:
 - **Characters**, between phones, from the sheet app's list.
 - **Campaigns**, between the desktop app, the phone app and other computers, from **⚙ Settings → Cloud sync**: notes, app state and images.
 
-Nothing is lost when two devices edit the same thing. A note keeps both versions, and the app state merges part by part. The server side (the `dmdesk_*` tables and functions, and a private `dmdesk` storage bucket) lives in the Pawmodoro project's `supabase/schema.sql`.
+Nothing is lost when two devices edit the same thing. A note keeps both versions, and the app state merges part by part. Images deleted with **⚙ Settings → 🧹 Clean up images** are deleted on the other devices too. The server side (the `dmdesk_*` tables and functions, a private `dmdesk` storage bucket for synced images and a public `dmdesk-table` one for online tables) lives in the Pawmodoro project's `supabase/schema.sql`.
 
 ## Files
 

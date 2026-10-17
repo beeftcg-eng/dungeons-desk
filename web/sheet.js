@@ -99,6 +99,7 @@
   }
 
   // ---------- The list of characters ----------
+  let listDraws = 0;
   function showList() {
     if (sheet) { sheet.destroy(); sheet = null; }
     document.querySelectorAll('.cs-rollpop').forEach(x => x.remove());
@@ -116,13 +117,15 @@
       <div style="margin-top:18px">${syncCard()}</div>
       <div class="card"><h3>🎲 Playing at a Dungeons Desk table?</h3>
         <p class="hint">Open your character, go to its 💾 File tab and send the file to your DM. They add it from Settings → ⇩ Add from a character file. If the DM already has you in the party, open their game on your phone (scan their QR code) and use 👤 Me → ⇩ Import my sheet.</p></div>`;
+    const drawn = ++listDraws;
+    Install.card({ app: 'sheet', short: 'Character', what: 'your characters' }).then(el => { if (el && drawn === listDraws && !sheet) main.prepend(el); });
     main.onclick = (e) => {
       const b = e.target.closest('button');
       if (!b) return;
       if (b.dataset.id) openChar(b.dataset.id);
       else if (b.dataset.a === 'new') newChar();
       else if (b.dataset.a === 'import') importFile();
-      else if (['signin', 'signup', 'sync', 'signout'].includes(b.dataset.a)) cloudAction(b.dataset.a);
+      else if (['signin', 'signup', 'sync', 'signout', 'keep', 'drop'].includes(b.dataset.a)) cloudAction(b.dataset.a);
       else if (b.dataset.a === 'later') { localStorage.setItem('dd.sheet.snooze', Date.now() + 3 * DAY); showList(); }
       else if (b.dataset.a === 'backup') { stale.forEach((c, i) => setTimeout(() => { download(fileOf(c)); markSaved(c); if (i === stale.length - 1) showList(); }, i * 300)); }
     };
@@ -209,13 +212,21 @@
   function scheduleSync(ms = 2000) { clearTimeout(syncTimer); if (Cloud.user()) syncTimer = setTimeout(sync, ms); }
   const payload = (c) => ({ model: c.model, created: c.created || null });
 
-  // Signed in as someone else than last time: this phone's characters are new to that account.
-  function adoptAccount() {
+  // Signed in as someone else than last time. Characters that came from the other account's cloud wait for a
+  // choice (syncCard): add them to this account too, or take them off this phone (they stay in the other account).
+  // Characters that never synced just go up to this account. Returns false while the choice is waiting.
+  const OWNER_EMAIL = 'dd.sheet.cloudEmail';
+  const fromOther = () => { const u = Cloud.user(), o = localStorage.getItem(OWNER); return u && o && o !== u.id ? chars.filter(c => c.cloudRev != null) : []; };
+  function adoptAccount(keep) {
     const u = Cloud.user();
-    if (!u || localStorage.getItem(OWNER) === u.id) return;
+    if (!u || localStorage.getItem(OWNER) === u.id) return true;
+    const other = fromOther();
+    if (other.length && keep === undefined) return false;
+    if (keep === false) chars = chars.filter(c => !other.includes(c));
     chars.forEach(c => { delete c.cloudRev; delete c.pushed; });
-    localStorage.setItem(OWNER, u.id); localStorage.removeItem(SINCE); setTombs([]);
+    localStorage.setItem(OWNER, u.id); localStorage.setItem(OWNER_EMAIL, u.email); localStorage.removeItem(SINCE); setTombs([]);
     try { localStorage.setItem(KEY, JSON.stringify(chars)); } catch { /* full; the next save says so */ }
+    return true;
   }
 
   function applyRemote(row, changed) {
@@ -241,7 +252,7 @@
     syncing = true; again = false;
     const changed = new Set();
     try {
-      adoptAccount();
+      if (!adoptAccount()) return;
       const r = await Cloud.rpc('dmdesk_pull_characters', { p_since: Number(localStorage.getItem(SINCE) || 0) });
       r.rows.forEach(row => applyRemote(row, changed));
       localStorage.setItem(SINCE, r.since);
@@ -283,12 +294,23 @@
     if (!u) return `<div class="card"><h3>☁ Sync your characters</h3><p class="hint">Sign in and your characters follow you to every phone, and stay safe if this one is lost. It uses a Pawmodoro account (the same as Beef's Brewhouse), so make one here if you don't have one.</p>
       <div class="signin"><input type="email" id="cl-email" placeholder="Email" autocomplete="username"><input type="password" id="cl-pass" placeholder="Password" autocomplete="current-password">
       <div class="row"><button class="btn primary" data-a="signin">Sign in</button><button class="btn" data-a="signup">Create account</button></div></div></div>`;
+    const other = fromOther();
+    if (other.length) {
+      const was = localStorage.getItem(OWNER_EMAIL);
+      return `<div class="card backup"><h3>☁ A different account</h3><p class="hint">${other.length === 1 ? `${esc(other[0].name)} syncs` : `${other.length} characters on this phone sync`} with ${was ? `<b>${esc(was)}</b>` : 'another account'}, and you're signed in as <b>${esc(u.email)}</b>. Nothing syncs until you choose.</p>
+        <div class="row"><button class="btn primary" data-a="keep">Add ${other.length === 1 ? 'it' : 'them'} to this account</button><button class="btn" data-a="drop">Remove ${other.length === 1 ? 'it' : 'them'} from this phone</button><button class="btn" data-a="signout">Sign out</button></div>
+        <p class="hint">Removing only clears this phone: ${other.length === 1 ? 'it stays' : 'they stay'} in the other account's cloud.</p></div>`;
+    }
     const when = lastSync ? new Date(lastSync).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null;
     return `<div class="card"><h3>☁ Synced</h3><p class="hint">Signed in as <b>${esc(u.email)}</b>. ${syncError ? `<span class="err">${esc(syncError)}</span>` : when ? `Last synced at ${when}.` : 'Syncing…'}</p>
       <div class="row"><button class="btn" data-a="sync">↻ Sync now</button><button class="btn" data-a="signout">Sign out</button></div></div>`;
   }
   async function cloudAction(a) {
     if (a === 'sync') { await sync(); return showList(); }
+    if (a === 'keep' || a === 'drop') {
+      if (a === 'drop' && !confirm('Remove these characters from this phone? They stay in the other account\'s cloud.')) return;
+      adoptAccount(a === 'keep'); await sync(); return showList();
+    }
     if (a === 'signout') { if (confirm('Sign out? Your characters stay on this phone, but stop syncing.')) { Cloud.signOut(); showList(); } return; }
     const email = $('#cl-email').value.trim(), pass = $('#cl-pass').value;
     if (!email || !pass) return toast('Enter your email and a password', true);

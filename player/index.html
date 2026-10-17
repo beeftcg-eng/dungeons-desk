@@ -175,12 +175,36 @@
   const display = params.get('display') === '1';
   const store = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
   if (params.get('player')) store.set('dm.player', params.get('player'));
-  // The join code comes in the QR code link (?code=…) or is typed once, and is kept on this phone.
-  let code = params.get('code') || store.get('dm.code') || '';
-  if (params.get('code')) store.set('dm.code', code);
   const qs = (extra = {}) => '?' + new URLSearchParams({ ...(me ? { player: me } : {}), code, ...extra }).toString();
+  // How this page talks to the DM: the desktop app's server on the same Wi-Fi (lan), or, in the phone app's
+  // play/ page, an online table in the cloud (web/table-net.js). Both have the same methods.
+  const lan = {
+    param: 'code', key: 'dm.code', clean: (c) => String(c || '').replace(/\D/g, ''),
+    unreachable: 'Can\'t reach the DM\'s computer. Are you on the same Wi-Fi?', notesWhere: 'They\'re saved on the DM\'s computer so they\'re here next session.',
+    check: (c) => fetch('/api/join?code=' + encodeURIComponent(c)).then(r => r.status === 204 ? 'ok' : r.status === 429 ? 'slow' : 'bad', () => 'offline'),
+    connect(cb) {
+      const es = new EventSource('/events' + (display ? '?' + new URLSearchParams({ display: '1', code }) : qs()));
+      es.onopen = () => cb.state(true);
+      // If the DM made a new join code, ask for it instead of retrying forever.
+      es.onerror = () => { cb.state(false); fetch('/api/join' + qs()).then(r => { if (r.status === 401) { es.close(); cb.badCode(); } }).catch(() => {}); };
+      es.onmessage = (e) => cb.data(JSON.parse(e.data));
+      return { close: () => es.close() };
+    },
+    act: (type, body) => fetch('/api/' + type + qs(), { method: 'POST', body: JSON.stringify(body) }).then(r => ({ ok: r.ok, status: r.status }), () => ({ ok: false, status: 0 })),
+    notesGet: () => fetch('/api/notes' + qs()).then(r => r.text()),
+    notesSet: (text) => fetch('/api/notes' + qs(), { method: 'POST', body: text }).then(r => { if (!r.ok) throw new Error(); }),
+  };
+  const net = window.TableNet ? TableNet.make(() => ({ code, me, display })) : lan;
+  // The join code comes in the link (the QR code's ?code=…, or an online table's ?t=…) or is typed once, and is kept on this phone.
+  let code = net.clean(params.get(net.param) || store.get(net.key) || '');
+  if (params.get(net.param)) store.set(net.key, code);
   let me = display ? null : store.get('dm.player');
-  let es = null, data = null, lastCurrent = null;
+  let conn = null, data = null, lastCurrent = null;
+  if (net.codePrompt) {
+    $('#codebox p').textContent = net.codePrompt;
+    Object.assign($('#codeIn'), { inputMode: net.numeric ? 'numeric' : 'text', maxLength: net.codeMax, placeholder: net.codePlaceholder });
+    $('#codeIn').style.letterSpacing = '.1em';
+  }
   let seen = new Set(JSON.parse(store.get('dm.seen') || '[]'));
   let firstLoad = true;
   const known = new Set(); // handouts this page has already been told about
@@ -192,13 +216,9 @@
   const buzz = (p) => { if (tapped && navigator.vibrate) navigator.vibrate(p); };
 
   function connect() {
-    if (es) es.close();
+    if (conn) conn.close();
     firstLoad = true;
-    es = new EventSource('/events' + (display ? '?' + new URLSearchParams({ display: '1', code }) : qs()));
-    es.onopen = () => $('#status').classList.add('ok');
-    // If the DM made a new join code, ask for it instead of retrying forever.
-    es.onerror = () => { $('#status').classList.remove('ok'); fetch('/api/join' + qs()).then(r => { if (r.status === 401) { es.close(); showCode(true); } }).catch(() => {}); };
-    es.onmessage = (e) => { data = JSON.parse(e.data); render(); };
+    conn = net.connect({ state: (ok) => $('#status').classList.toggle('ok', ok), badCode: () => { conn.close(); showCode(true); }, data: (d) => { data = d; render(); } });
   }
 
   function showCode(wrong) {
@@ -207,12 +227,12 @@
     setTimeout(() => $('#codeIn').focus(), 50);
   }
   function tryCode(c) {
-    c = String(c || '').replace(/\D/g, '');
+    c = net.clean(c);
     if (!c) return;
-    fetch('/api/join?code=' + c).then(r => {
-      if (r.status === 204) { code = c; store.set('dm.code', c); $('#codebox').hidden = true; start(); }
-      else $('#codeErr').textContent = r.status === 429 ? 'Too many tries. Wait a minute, then try again.' : 'That code didn\'t work. Check the DM\'s screen.';
-    }).catch(() => { $('#codeErr').textContent = 'Can\'t reach the DM\'s computer. Are you on the same Wi-Fi?'; });
+    net.check(c).then(st => {
+      if (st === 'ok') { code = c; store.set(net.key, c); $('#codebox').hidden = true; start(); }
+      else $('#codeErr').textContent = st === 'slow' ? 'Too many tries. Wait a minute, then try again.' : st === 'offline' ? net.unreachable : 'That code didn\'t work. Check the DM\'s screen.';
+    });
   }
   $('#codeGo').addEventListener('click', () => tryCode($('#codeIn').value));
   $('#codeIn').addEventListener('keydown', (e) => { if (e.key === 'Enter') tryCode(e.target.value); });
@@ -331,7 +351,7 @@
   const myTokens = () => ((data && data.map && data.map.tokens) || []).filter(t => me && t.owner && t.owner.toLowerCase() === me.toLowerCase());
   function hint(text) { const el = document.querySelector('#map .maphint'); if (!el) return; el.textContent = text; el.hidden = !text; clearTimeout(hint.t); hint.t = setTimeout(() => (el.hidden = true), 2500); }
   function toMapPoint(c, cx, cy) { const r = c.getBoundingClientRect(); return { x: (cx - r.left - mapView.x) / mapView.s, y: (cy - r.top - mapView.y) / mapView.s }; }
-  function post(path, body) { return fetch(path + qs(), { method: 'POST', body: JSON.stringify(body) }).catch(() => {}); }
+  const post = (type, body) => net.act(type, body);
   setInterval(() => { if (data && data.map && (data.map.pings || []).length) drawMap(); }, 60);
   setInterval(() => { if (data && data.map && data.map.ping && Date.now() - data.map.ping.t < 4200) drawMap(); }, 50);
   window.addEventListener('resize', () => fitMap(false));
@@ -340,7 +360,7 @@
       c.setPointerCapture(e.pointerId); pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       const m = data && data.map; if (!m || !mapView || pointers.size > 1 || display) { movingTok = null; myRuler = null; return; }
       const p = toMapPoint(c, e.clientX, e.clientY);
-      if (mapTool === 'ping') { post('/api/ping', { map: m.id, x: p.x, y: p.y }); buzz(30); return; }
+      if (mapTool === 'ping') { post('ping', { map: m.id, x: p.x, y: p.y }); buzz(30); return; }
       if (mapTool === 'measure') { myRuler = { x: p.x, y: p.y, x2: p.x, y2: p.y, color: '#40c4ff' }; return; }
       const g = (m.grid && m.grid.size) || 50;
       const tk = m.playerMove && myTokens().find(t => Math.hypot(t.x - p.x, t.y - p.y) < (t.size || 1) * g / 2 + 10 / mapView.s);
@@ -370,7 +390,7 @@
         const x = (g.ox || 0) + (Math.round((movingTok.x - (g.ox || 0)) / g.size - n / 2) + n / 2) * g.size;
         const y = (g.oy || 0) + (Math.round((movingTok.y - (g.oy || 0)) / g.size - n / 2) + n / 2) * g.size;
         const t = m.tokens.find(t => t.id === movingTok.id); if (t) { t.x = x; t.y = y; }
-        post('/api/move', { map: m.id, token: movingTok.id, x, y });
+        post('move', { map: m.id, token: movingTok.id, x, y });
         movingTok = null; drawMap();
       }
       if (myRuler) { const r = myRuler; setTimeout(() => { if (myRuler === r) { myRuler = null; drawMap(); } }, 2000); }
@@ -388,13 +408,13 @@
   function meBox() {
     if (meBoxEl) return meBoxEl;
     const box = meBoxEl = document.createElement('div'); box.id = 'mebox';
-    box.innerHTML = '<div class="card" id="tokcard"></div><div class="card"><div style="display:flex;justify-content:space-between;align-items:center"><b>📝 My notes</b><span class="saved" id="saved"></span></div><p style="color:var(--dim);font-size:13px;margin:4px 0 8px">Only you see these. They\'re saved on the DM\'s computer so they\'re here next session.</p><textarea class="mynotes" placeholder="Names, clues, loot, things to remember…"></textarea></div><div class="card" id="charfile"><b>📜 Character file</b><p style="color:var(--dim);font-size:13px;margin:4px 0 10px">Made your character in the Dungeons Desk character sheet app? Import it here. Or save this sheet to keep using it there.</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-cf="import">⇩ Import my sheet</button><button class="btn" data-cf="export">⬇ Save my sheet</button></div></div><button class="btn" id="replaytour" style="width:100%;margin-bottom:16px">❓ Show the tour again</button>';
+    box.innerHTML = `<div class="card" id="tokcard"></div><div class="card"><div style="display:flex;justify-content:space-between;align-items:center"><b>📝 My notes</b><span class="saved" id="saved"></span></div><p style="color:var(--dim);font-size:13px;margin:4px 0 8px">Only you see these. ${net.notesWhere}</p><textarea class="mynotes" placeholder="Names, clues, loot, things to remember…"></textarea></div><div class="card" id="charfile"><b>📜 Character file</b><p style="color:var(--dim);font-size:13px;margin:4px 0 10px">Made your character in the Dungeons Desk character sheet app? Import it here. Or save this sheet to keep using it there.</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-cf="import">⇩ Import my sheet</button><button class="btn" data-cf="export">⬇ Save my sheet</button></div></div><button class="btn" id="replaytour" style="width:100%;margin-bottom:16px">❓ Show the tour again</button>`;
     box.querySelector('#replaytour').addEventListener('click', startTour);
     box.querySelector('#charfile').addEventListener('click', (e) => { const a = e.target.dataset.cf; if (a === 'import') importSheet(); else if (a === 'export') exportSheet(); });
     box.querySelector('.mynotes').addEventListener('input', (e) => {
       $('#saved').textContent = 'Saving…';
       clearTimeout(notesTimer);
-      notesTimer = setTimeout(() => fetch('/api/notes' + qs(), { method: 'POST', body: e.target.value })
+      notesTimer = setTimeout(() => net.notesSet(e.target.value)
         .then(() => { $('#saved').textContent = 'Saved'; }).catch(() => { $('#saved').textContent = 'Not saved — reconnecting'; }), 700);
     });
     return box;
@@ -403,10 +423,10 @@
   function sendSheet(model) {
     sheetSent = Date.now();
     clearTimeout(sheetTimer);
-    sheetTimer = setTimeout(() => post('/api/sheet', { model: { cls: model.cls, level: model.level, ac: model.ac, hp: model.hp, initBonus: model.initBonus, sheet: model.sheet } }), 600);
+    sheetTimer = setTimeout(() => post('sheet', { model: { cls: model.cls, level: model.level, ac: model.ac, hp: model.hp, initBonus: model.initBonus, sheet: model.sheet } }), 600);
   }
   function shareToDm(sh) {
-    return fetch('/api/share' + qs(), { method: 'POST', body: JSON.stringify({ share: sh }) }).then(r => r.ok);
+    return post('share', { share: sh }).then(r => r.ok);
   }
   const toast = (t) => { document.querySelectorAll('.cs-toast').forEach(x => x.remove()); const el = document.createElement('div'); el.className = 'cs-toast'; el.textContent = t; document.body.append(el); setTimeout(() => el.remove(), 2800); };
   // Character files (CharSheet.toFile) from the standalone sheet app. Importing sends the sheet to the DM like any edit.
@@ -425,8 +445,8 @@
   async function offerSheet() {
     const c = await pickCharFile();
     if (!c) return;
-    const r = await fetch('/api/offer' + qs(), { method: 'POST', body: JSON.stringify({ name: c.name, model: c.model }) }).catch(() => null);
-    toast(r && r.ok ? 'Sent! The DM adds it from their screen.' : r && r.status === 429 ? 'Wait a few seconds and try again' : 'Not sent: check the connection to the DM');
+    const r = await post('offer', { name: c.name, model: c.model });
+    toast(r.ok ? 'Sent! The DM adds it from their screen.' : r.status === 429 ? 'Wait a few seconds and try again' : 'Not sent: check the connection to the DM');
   }
   function importSheet() {
     if (!sheet || !data.card) return offerSheet();
@@ -511,9 +531,8 @@
     cv.addEventListener('pointerup', () => (last = null));
     box.querySelector('[data-a=send]').addEventListener('click', () => {
       $('#toksaved').textContent = 'Sending…';
-      fetch('/api/token' + qs(), { method: 'POST', body: JSON.stringify({ dataUrl: cv.toDataURL('image/png') }) })
-        .then(r => { $('#toksaved').textContent = r.ok ? 'Sent to the DM ✓' : 'That picture didn\'t work, try another'; tokDirty = false; })
-        .catch(() => { $('#toksaved').textContent = 'Not sent — reconnecting'; });
+      post('token', { dataUrl: cv.toDataURL('image/png') })
+        .then(r => { $('#toksaved').textContent = r.ok ? 'Sent to the DM ✓' : r.status ? 'That picture didn\'t work, try another' : 'Not sent — reconnecting'; if (r.ok) tokDirty = false; });
     });
     paintToken();
   }
@@ -537,7 +556,7 @@
 
   function loadNotes() {
     if (notesLoaded || !me) return;
-    fetch('/api/notes' + qs()).then(r => r.text()).then(t => { const ta = document.querySelector('#mebox .mynotes'); if (ta && !ta.value) ta.value = t; notesLoaded = true; }).catch(() => {});
+    net.notesGet().then(t => { const ta = document.querySelector('#mebox .mynotes'); if (ta && !ta.value) ta.value = t; notesLoaded = true; }).catch(() => {});
   }
 
   function renderTurns() {
@@ -633,7 +652,7 @@
   const maybeTour = () => { if (!display && me && !store.get('dm.tour.done') && tourStep < 0) setTimeout(startTour, 600); };
 
   // Check the saved join code before connecting.
-  fetch('/api/join' + qs()).then(r => { if (r.status === 204) start(); else showCode(true); }).catch(() => start());
+  net.check(code).then(st => { if (st === 'ok' || st === 'offline') start(); else showCode(true); });
 })();
 </script>
 </body>

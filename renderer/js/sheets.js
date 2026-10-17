@@ -233,5 +233,5 @@ window.Sheets = (() => {
     dm.onPlayerAction(playerAction);
   }
 
-  return { mount, open: openSheet, importNew, playerFeed, playerHomebrew, refreshOpen, syncFromCombat, numbers };
+  return { mount, open: openSheet, importNew, playerAction, playerFeed, playerHomebrew, refreshOpen, syncFromCombat, numbers };
 })();

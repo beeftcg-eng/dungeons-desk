@@ -495,10 +495,14 @@ ${srd.length ? '\n## Stat Blocks\n\n' + srd.map(i => Statblock.fence(i.sb)).join
       const pv = Store.get().playerView;
       App.players = info.players;
       box.innerHTML = '';
-      // The phone app can't host the game for other phones; that's the desktop app's job.
+      const seeing = [h('h4', 'What players see'),
+        h('label.chk', h('input', { type: 'checkbox', checked: pv.showEnemyNames !== false, onchange: (e) => { pv.showEnemyNames = e.target.checked; Store.save(); publishToPlayers(); } }), ' Show enemy names'),
+        h('label.field', h('span', 'Enemy health'), h('select', { onchange: (e) => { pv.enemyHp = e.target.value; Store.save(); publishToPlayers(); } },
+          h('option', { value: 'status', selected: pv.enemyHp !== 'none' }, 'Healthy / Bloodied / Down'), h('option', { value: 'none', selected: pv.enemyHp === 'none' }, 'Hidden')))];
+      // The phone app can't host a game on the Wi-Fi (that's the desktop app's job), but it can open an online table.
       if (info.web) return box.append(h('h3', '📱 Players\' phones'),
-        h('p', 'Players\' phones join a game hosted by the Dungeons Desk desktop app on the same Wi-Fi. This phone app is for prep and running the table yourself.'),
-        h('p.dim', 'Players who just want their character sheet can use the phone character sheet, then export it for you to add in Settings → ⇩ Add from a character file.'));
+        h('p.dim', 'At the table, players\' phones join a game hosted by the Dungeons Desk desktop app on the same Wi-Fi. From this phone, open an online table instead: players join with a link, from anywhere.'),
+        Online.panel(), seeing);
       box.append(h('h3', '📱 Players\' phones'),
         info.urls.length ? [
           h('p', 'Players on the same Wi-Fi scan this or open:'),
@@ -510,11 +514,9 @@ ${srd.length ? '\n## Stat Blocks\n\n' + srd.map(i => Statblock.fence(i.sb)).join
           : h('p', 'No network connection found. Connect this computer to Wi-Fi/LAN to share with phones.'),
         h('h4', `Connected (${info.players.filter(p => p.online).length})`),
         info.players.length ? h('div.player-list', info.players.map(p => h('div', h('span.dot' + (p.online ? '.on' : '')), ' ', p.name))) : h('p.dim', 'Nobody yet.'),
-        h('h4', 'What players see'),
-        h('label.chk', h('input', { type: 'checkbox', checked: pv.showEnemyNames !== false, onchange: (e) => { pv.showEnemyNames = e.target.checked; Store.save(); publishToPlayers(); } }), ' Show enemy names'),
-        h('label.field', h('span', 'Enemy health'), h('select', { onchange: (e) => { pv.enemyHp = e.target.value; Store.save(); publishToPlayers(); } },
-          h('option', { value: 'status', selected: pv.enemyHp !== 'none' }, 'Healthy / Bloodied / Down'), h('option', { value: 'none', selected: pv.enemyHp === 'none' }, 'Hidden'))),
-        h('button', { onclick: () => dm.server.openDisplay(), style: 'width:100%' }, '🖥 Open player display window (for a TV)'));
+        seeing,
+        h('button', { onclick: () => dm.server.openDisplay(), style: 'width:100%' }, '🖥 Open player display window (for a TV)'),
+        Online.panel());
     });
   }
 

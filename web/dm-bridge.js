@@ -109,6 +109,13 @@
     const old = urls[kind].get(name); if (old) URL.revokeObjectURL(old);
     urls[kind].set(name, URL.createObjectURL(blob));
   }
+  async function dropBlob(kind, name) {
+    if (!urls[kind].has(name)) return false;
+    await del('blobs', [cid, kind, name]);
+    URL.revokeObjectURL(urls[kind].get(name));
+    urls[kind].delete(name);
+    return true;
+  }
 
   // ---------- Note history (same rules as main.js) ----------
   async function snapshots(rel) {
@@ -306,6 +313,7 @@ started: ${new Date().toISOString().slice(0, 10)}
       list: r(async () => [...urls.attach.keys()]),
       read: r(async (rel) => { const b = await get('blobs', [cid, 'attach', safe(rel)]); if (!b) throw new Error('Not found'); return toDataUrl(b.blob); }),
       write: r(async (rel, dataUrl) => { rel = safe(rel); if (!IMAGE_EXT.test(rel)) throw new Error('Not an image'); await saveBlob('attach', rel, dataUrl); return true; }),
+      delete: r(async (rel) => dropBlob('attach', safe(rel))),
     },
     // What cloud sync last synced for the open campaign (the desktop app keeps it in .dmtools/cloud.json).
     cloud: {
@@ -362,6 +370,7 @@ started: ${new Date().toISOString().slice(0, 10)}
       list: r(async () => [...urls.media.keys()]),
       read: r(async (name) => { const b = await get('blobs', [cid, 'media', String(name).split('/').pop()]); if (!b) throw new Error('Not found'); return toDataUrl(b.blob); }),
       write: r(async (name, dataUrl) => { name = String(name).split('/').pop(); if (!/\.(png|jpe?g|gif|webp)$/i.test(name)) throw new Error('Unsupported image'); await saveBlob('media', name, dataUrl); return true; }),
+      delete: r(async (name) => dropBlob('media', String(name).split('/').pop())),
     },
     file: { savePng: async (dataUrl, defaultName) => { download(toBlob(dataUrl), defaultName || 'image.png'); return defaultName || 'image.png'; } },
     print: { html: (html, mode) => printHtml(html).then(() => mode === 'pdf' ? null : true) }, // Save as PDF is in the print sheet
@@ -371,6 +380,7 @@ started: ${new Date().toISOString().slice(0, 10)}
       publish: async () => true,
       openDisplay: noop,
       newCode: async () => '',
+      qr: async () => null,
       onPlayers: noop,
     },
     openExternal: async (url) => { if (/^https?:\/\//.test(url)) window.open(url, '_blank', 'noopener'); },

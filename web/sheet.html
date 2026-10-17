@@ -47,6 +47,7 @@
   .card h3 { margin: 0 0 6px; font-size: 16px; }
   .card .btn { margin-top: 6px; }
   .toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: var(--panel2); border: 1px solid var(--accent); border-radius: 18px; padding: 9px 16px; z-index: 90; font-size: 14px; box-shadow: 0 8px 24px rgba(0,0,0,.5); }
+  .install-card { border-color: var(--accent); }
   .toast.err { border-color: var(--red); }
 </style>
 </head>
@@ -54,6 +55,7 @@
 <header><h1 id="title">Character Sheet</h1><button id="list-btn" hidden>☰ Characters</button></header>
 <main id="main"></main>
 <script src="../web/sw-register.js"></script>
+<script src="../web/install.js"></script>
 <script src="../shared/charsheet-data.js"></script>
 <script src="../shared/charsheet.js"></script>
 <script src="../shared/cloud.js"></script>

@@ -385,6 +385,14 @@ function registerIpc() {
     if (!/\.(png|jpe?g|gif|webp)$/i.test(String(name))) throw new Error('Unsupported image');
     return writeImage(path.join(mediaDir(), path.basename(String(name))), dataUrl);
   });
+  // Unused images (Settings → 🧹 Clean up images) and images deleted on another synced device go to the system trash.
+  const trashImage = async (full) => {
+    if (!fs.existsSync(full)) return false;
+    try { await shell.trashItem(full); } catch { fs.rmSync(full, { force: true }); }
+    return true;
+  };
+  ipcMain.handle('media:delete', (_e, name) => trashImage(path.join(mediaDir(), path.basename(String(name)))));
+  ipcMain.handle('attach:delete', (_e, rel) => { const full = safe(rel); if (!IMAGE_EXT.test(full)) throw new Error('Not an image'); return trashImage(full); });
   ipcMain.handle('attach:read', (_e, rel) => { const full = safe(rel); if (!IMAGE_EXT.test(full)) throw new Error('Not an image'); return readImage(full); });
   ipcMain.handle('attach:write', (_e, rel, dataUrl) => { const full = safe(rel); if (!IMAGE_EXT.test(full)) throw new Error('Not an image'); return writeImage(full, dataUrl); });
 
@@ -460,6 +468,8 @@ function registerIpc() {
   });
   ipcMain.handle('server:newCode', () => { config.joinCode = newJoinCode(); saveConfig(); server.setCode(config.joinCode); return config.joinCode; });
   ipcMain.handle('server:publish', (_e, pub) => { server.publish(pub); return true; });
+  // A QR code for an online table's link (renderer/js/online.js).
+  ipcMain.handle('server:qr', (_e, text) => QRCode.toDataURL(String(text).slice(0, 500), { margin: 1, width: 260 }));
   ipcMain.handle('server:openDisplay', () => {
     const dw = new BrowserWindow({ width: 900, height: 700, title: 'Player Display', autoHideMenuBar: true });
     dw.loadURL(`http://127.0.0.1:${server.port}/?display=1&code=${server.code}`);

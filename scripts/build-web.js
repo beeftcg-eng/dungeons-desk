@@ -2,6 +2,7 @@
 //   index.html     the start page: "I'm the DM" or "I'm a player"
 //   dm/            the DM app: renderer/ as is, with web/dm-bridge.js standing in for preload.js
 //   sheet/         the standalone character sheet (web/sheet.html)
+//   play/          the players' page (player/index.html) for online tables, talking to the cloud (web/table-net.js)
 //   shared/ vendor/ icons/ web/  what those pages load
 //   sw.js          caches all of it so both apps work offline
 // No bundler: files are copied, and only dm/index.html is rewritten (paths, CSP, the bridge script).
@@ -32,7 +33,7 @@ fs.rmSync(OUT, { recursive: true, force: true });
 copyDir(rel('renderer'), path.join(OUT, 'dm'));
 copyDir(rel('shared'), path.join(OUT, 'shared'));
 fs.mkdirSync(path.join(OUT, 'web'), { recursive: true });
-for (const f of ['dm-bridge.js', 'sw-register.js', 'sheet.js']) fs.copyFileSync(rel('web', f), path.join(OUT, 'web', f));
+for (const f of ['dm-bridge.js', 'sw-register.js', 'install.js', 'sheet.js', 'table-net.js']) fs.copyFileSync(rel('web', f), path.join(OUT, 'web', f));
 fs.mkdirSync(path.join(OUT, 'vendor'), { recursive: true });
 fs.copyFileSync(rel('node_modules/marked/lib/marked.umd.js'), path.join(OUT, 'vendor/marked.umd.js'));
 fs.copyFileSync(rel('node_modules/js-yaml/dist/js-yaml.min.js'), path.join(OUT, 'vendor/js-yaml.min.js'));
@@ -72,7 +73,7 @@ let dm = fs.readFileSync(rel('renderer/index.html'), 'utf8');
 dm = dm.replace(/<meta http-equiv="Content-Security-Policy" content="[^"]*">/, `<meta http-equiv="Content-Security-Policy" content="${CSP}">\n${head('manifest.json', 'DM Desk')}`);
 dm = replaceOnce(dm, '<html lang="en">', `<html lang="en" data-version="${version}">`);
 dm = replaceOnce(dm, '../build/icon-128.png', '../icons/icon-128.png');
-dm = replaceOnce(dm, '<script src="../node_modules/marked/lib/marked.umd.js"></script>', '<script src="../web/dm-bridge.js"></script>\n<script src="../web/sw-register.js"></script>\n<script src="../vendor/marked.umd.js"></script>');
+dm = replaceOnce(dm, '<script src="../node_modules/marked/lib/marked.umd.js"></script>', '<script src="../web/dm-bridge.js"></script>\n<script src="../web/sw-register.js"></script>\n<script src="../web/install.js"></script>\n<script src="../vendor/marked.umd.js"></script>');
 dm = replaceOnce(dm, '../node_modules/js-yaml/dist/js-yaml.min.js', '../vendor/js-yaml.min.js');
 if (/\.\.\/(node_modules|build)\//.test(dm)) throw new Error('build-web: dm/index.html still points outside the site');
 write('dm/index.html', dm);
@@ -80,15 +81,27 @@ write('dm/index.html', dm);
 let sheet = fs.readFileSync(rel('web/sheet.html'), 'utf8');
 sheet = sheet.replace('<!--HEAD-->', `<meta http-equiv="Content-Security-Policy" content="${CSP}">\n${head('manifest.json', 'Character Sheet')}`).replace(/__VERSION__/g, version);
 write('sheet/index.html', sheet);
+// The players' page for online tables: the LAN page as it is, with web/table-net.js in place of the LAN server.
+// Its script is inline (the LAN server serves it as one file), so this page's CSP allows inline scripts.
+let play = fs.readFileSync(rel('player/index.html'), 'utf8');
+play = replaceOnce(play, '<meta charset="utf-8">', `<meta charset="utf-8">\n<meta http-equiv="Content-Security-Policy" content="${CSP.replace("script-src 'self'", "script-src 'self' 'unsafe-inline'")}">`);
+play = play.replace(/"\/shared\//g, '"../shared/').replace(/"\/icon\.png"/g, '"../icons/icon-128.png"');
+play = replaceOnce(play, '<script src="../shared/handout.js"></script>', '<script src="../shared/cloud.js"></script>\n<script src="../web/table-net.js"></script>\n<script src="../shared/handout.js"></script>');
+if (/(src|href)="\/(?!\/)/.test(play)) throw new Error('build-web: play/index.html still has a site-root path');
+write('play/index.html', play);
 write('index.html', fs.readFileSync(rel('web/index.html'), 'utf8').replace(/__VERSION__/g, version));
 
-const manifest = (name, short, desc) => JSON.stringify({
-  name, short_name: short, description: desc, start_url: './', scope: './', display: 'standalone', orientation: 'any',
+// Each app's id is its folder (the same as the default, written out so it never changes by accident). The
+// related_applications entry lets the app ask Chrome whether it's already installed (web/install.js).
+const SITE = 'https://beeftcg-eng.github.io/dungeons-desk/';
+const manifest = (dir, name, short, desc) => JSON.stringify({
+  id: './', name, short_name: short, description: desc, start_url: './', scope: './', display: 'standalone', orientation: 'any',
+  related_applications: [{ platform: 'webapp', url: `${SITE}${dir}/manifest.json` }],
   background_color: '#17141f', theme_color: '#17141f',
   icons: [256, 512].map(s => ({ src: `../icons/icon-${s}.png`, sizes: `${s}x${s}`, type: 'image/png', purpose: 'any' })),
 }, null, 2);
-write('dm/manifest.json', manifest('Dungeons Desk', 'DM Desk', 'Notes, initiative, maps, loot and rules for Dungeon Masters'));
-write('sheet/manifest.json', manifest('Dungeons Desk Character Sheet', 'Character', 'A D&D 5e (2024) character sheet that works on its own'));
+write('dm/manifest.json', manifest('dm', 'Dungeons Desk', 'DM Desk', 'Notes, initiative, maps, loot and rules for Dungeon Masters'));
+write('sheet/manifest.json', manifest('sheet', 'Dungeons Desk Character Sheet', 'Character', 'A D&D 5e (2024) character sheet that works on its own'));
 
 // Service worker: every file, precached under a name that changes whenever any file does.
 const files = [];
@@ -97,7 +110,7 @@ walk(OUT, '');
 const hash = crypto.createHash('sha256');
 files.sort().forEach(f => { hash.update(f); hash.update(fs.readFileSync(path.join(OUT, f))); });
 // Pages are cached by their folder URL (dm/ rather than dm/index.html), which is how they're opened.
-const shell = ['./', 'dm/', 'sheet/', ...files.filter(f => !/(^|\/)index\.html$/.test(f))];
+const shell = ['./', 'dm/', 'sheet/', 'play/', ...files.filter(f => !/(^|\/)index\.html$/.test(f))];
 write('sw.js', fs.readFileSync(rel('web/sw.js'), 'utf8')
   .replace('__CACHE__', `dd-${version}-${hash.digest('hex').slice(0, 10)}`)
   .replace('__FILES__', JSON.stringify(shell)));

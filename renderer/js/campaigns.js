@@ -86,11 +86,35 @@ window.Campaigns = (() => {
     ]);
   }
 
+  // Images nothing uses any more: media files the app state doesn't name (handouts, maps, tokens) and note images
+  // no note mentions. They go to the system trash on desktop; synced devices delete them too.
+  async function cleanImages() {
+    await Notes.flush();
+    await Store.saveNow();
+    const text = JSON.stringify(Store.get()) + '\n' + (await dm.notes.readAll()).map(n => n.content).join('\n');
+    const used = (name) => text.includes(name) || text.includes(encodeURI(name)) || text.includes(encodeURIComponent(name));
+    const media = (await dm.media.list()).filter(n => !used(n));
+    const attach = (await dm.attach.list()).filter(p => !used(p.split('/').pop()));
+    if (!media.length && !attach.length) return toast('Every image is in use');
+    let bytes = 0;
+    for (const n of media) bytes += ((await dm.media.read(n).catch(() => '')).length * 3) / 4;
+    for (const p of attach) bytes += ((await dm.attach.read(p).catch(() => '')).length * 3) / 4;
+    const n = media.length + attach.length, mb = (bytes / 1048576).toFixed(1);
+    const ok = await U.confirm('🧹 Clean up images', `${n} image${n === 1 ? ' isn\'t' : 's aren\'t'} used by any note, handout, map or token (${mb} MB)` +
+      (attach.length ? `, including ${attach.slice(0, 5).map(p => p.split('/').pop()).join(', ')}${attach.length > 5 ? '…' : ''}` : '') +
+      (dm.isWeb ? '. Delete them from this device?' : '. Move them to the trash?') + (CloudSync.isLinked() ? ' Your other synced devices delete them too.' : ''));
+    if (!ok) return;
+    for (const x of media) await dm.media.delete(x);
+    for (const x of attach) await dm.attach.delete(x);
+    toast(`Removed ${n} image${n === 1 ? '' : 's'}`);
+    CloudSync.syncNow().catch(() => {});
+  }
+
   async function refreshRail() {
     const info = await dm.campaigns.list();
     const el = U.$('#campaign-name');
     if (el) { el.textContent = info.currentName; el.parentElement.title = `Campaign: ${info.currentName}\nClick to switch or start a new one`; }
   }
 
-  return { open, newCampaign, refreshRail, exportFile, importFile, remindBackup, switchTo };
+  return { open, newCampaign, refreshRail, exportFile, importFile, remindBackup, switchTo, cleanImages };
 })();
