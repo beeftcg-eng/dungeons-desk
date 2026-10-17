@@ -35,6 +35,11 @@ window.Settings = (() => {
     const backupBox = h('div.backup-box', h('h4', '💾 Backups'), h('p.dim', 'Loading…'));
     dm.backup.info().then(b => {
       backupBox.innerHTML = '';
+      // The phone app keeps campaigns in the browser's storage: an exported file is the backup.
+      if (b.web) return backupBox.append(h('h4', '💾 Backups'),
+        h('p', 'This campaign is saved on this device. To keep a copy, or to move it to the desktop app, export it as a campaign file. Every note also keeps its own version history: use 🕘 in the note toolbar.'),
+        h('div.row', h('button', { onclick: () => Campaigns.exportFile() }, '⇧ Export campaign file'), h('button', { onclick: Campaigns.importFile }, '⇩ Import a campaign file')),
+        h('p.hint', 'On the desktop app, 🗺 → “Import a campaign file…” opens it as a new campaign folder.'));
       backupBox.append(h('h4', '💾 Backups'),
         h('p', 'A full copy of this campaign is saved automatically once a day (the last 14 are kept) in ', h('code', b.dir), '. Every note also keeps its own version history — use 🕘 in the note toolbar.'),
         h('p.dim', b.last ? `Last backup: ${new Date(b.last).toLocaleString()} · ${b.count} backup${b.count === 1 ? '' : 's'} kept` : 'No backups yet.'),
@@ -51,15 +56,19 @@ window.Settings = (() => {
           h('h3', '🛡 Party'),
           h('p.dim', 'Players pick their character name on their phone. These are also used by “Add the party” in the initiative tracker and when sending handouts to individual players.'),
           h('table.party-table', h('thead', h('tr', ['Character', 'Player', 'Class', 'Level', 'Init', 'AC', 'Max HP', 'Sheet', 'Token', ''].map(t => h('th', t)))), h('tbody', party.map(row))),
-          h('button', { onclick: () => { party.push({ name: '', player: '', cls: '', level: 1, initBonus: 0, ac: '', hp: '' }); Store.save(); draw(); } }, '+ Add character')),
+          h('div.row',
+            h('button', { onclick: () => { party.push({ name: '', player: '', cls: '', level: 1, initBonus: 0, ac: '', hp: '' }); Store.save(); draw(); } }, '+ Add character'),
+            h('button', { title: 'A .ddchar.json file a player exported from the Dungeons Desk character sheet', onclick: () => Sheets.importNew().then(ok => ok && draw()) }, '⇩ Add from a character file'))),
         h('div.card',
           h('h3', '🗺 Campaign'),
-          h('p', 'Notes are plain Markdown files in this folder, so you can back them up, sync them, or even open the same folder in Obsidian. Handouts, tokens, loot tables and initiative are saved in its hidden ', h('code', '.dmtools'), ' subfolder.'),
-          h('code.path', vault),
+          dm.isWeb ? h('p', 'Campaign: ', h('b', vault), '. On the phone app, notes, handouts, tokens and everything else are saved on this device. Export a campaign file to move it to or from the desktop app.')
+            : [h('p', 'Notes are plain Markdown files in this folder, so you can back them up, sync them, or even open the same folder in Obsidian. Handouts, tokens, loot tables and initiative are saved in its hidden ', h('code', '.dmtools'), ' subfolder.'),
+              h('code.path', vault)],
           h('div.row',
             h('button.primary', { onclick: Campaigns.newCampaign }, '✨ New campaign'),
             h('button', { onclick: Campaigns.open }, '🔁 Switch campaign'),
-            h('button', { onclick: () => dm.vault.reveal() }, '📂 Open folder')),
+            dm.isWeb ? null : h('button', { onclick: () => dm.vault.reveal() }, '📂 Open folder'),
+            h('button', { title: 'Save this campaign as one file, to move it between the desktop and phone apps', onclick: () => Campaigns.exportFile() }, '⇧ Export')),
           h('div.row',
             h('button', { onclick: async () => { const n = await dm.vault.addSeed('guide'); await Notes.refresh(); toast(n ? `Added ${n} guide notes, see the Guide folder` : 'The guide is already in this campaign'); if (n) Notes.open('Guide/0 Start Here.md'); } }, '📘 Add the how-to guide'),
             h('button', { onclick: async () => { const n = await dm.vault.addSeed('examples'); await Notes.refresh(); toast(n ? `Added ${n} example notes` : 'The examples are already here'); } }, '🧪 Add example notes'),
@@ -120,6 +129,7 @@ window.Settings = (() => {
       card.innerHTML = '';
       card.append(h('h3', '⬆ Updates'), h('p', `Dungeons Desk v${i.version}`, h('span.dim', ` · ${i.platform}`)),
         i.canUpdate ? [h('p.dim', 'Updates are downloaded from GitHub. Only the changed parts are downloaded, not the whole app.'), h('button', { onclick: () => dm.update.check() }, '🔍 Check for updates'), status]
+          : i.web ? h('p.dim', 'The phone app updates itself: close it and open it again to get the newest version.')
           : h('p.dim', i.packaged ? 'Automatic updates aren\'t available for this install type. Download the latest version from the GitHub releases page.' : 'You\'re running from the source folder, so updates come from the project files rather than GitHub.'),
         h('div.row', h('button.small', { onclick: () => dm.openExternal(i.releasesUrl) }, '🌐 Releases page')));
       show(i.status);

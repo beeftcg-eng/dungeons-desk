@@ -36,6 +36,15 @@ During combat the initiative tracker owns HP. Players tap their HP to *report* d
 > [!info] What players can and can't do
 > Players can only *see* things. The exceptions are their own character sheet and notes, sending you rolls and cards, moving tokens you've assigned to them, pinging, and choosing their token picture. Secrets, hidden monsters and hidden tokens never reach their phones.
 
+## Players who just want a character sheet 📜
+Players don't need your game running to use their sheet. The phone app at **beeftcg-eng.github.io/dungeons-desk** has an **I'm a player** page: the same character sheet, working on its own and saved on their phone. They can build a character before session zero, roll from it, level up and track everything between sessions. Rolls there are made on the phone itself.
+
+To bring that character into your game:
+- **You add it.** The player opens their character's **💾 File** tab and sends you the file (📤 Share file). In **⚙ Settings → Party**, click **⇩ Add from a character file**. To update someone who's already in the party, open their **📜** sheet and click **⇩ Import**.
+- **They import it.** Once you've added them to the party, they join your game as usual, then use **👤 Me → 📝 Notes → ⇩ Import my sheet**.
+
+It works the other way too. **⇧ Export** in a sheet window (or **⬇ Save my sheet** on their phone) gives them a file to open in the character sheet app between sessions.
+
 **🖥 Open player display window** (on the Initiative page) gives a big-screen view for a TV: the map and the turn order side by side.
 
 > [!warning] Can't connect?

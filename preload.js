@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('dm', {
   campaigns: {
     list: call('campaigns:list'), create: call('campaigns:create'), open: call('campaigns:open'), browse: call('campaigns:browse'),
     forget: call('campaigns:forget'), rename: call('campaigns:rename'), reveal: call('campaigns:reveal'),
+    exportFile: call('campaigns:exportFile'), importFile: call('campaigns:importFile'),
   },
   tokens: { exportFiles: call('tokens:exportFiles') },
   history: { list: call('history:list'), read: call('history:read'), snapshot: call('history:snapshot') },

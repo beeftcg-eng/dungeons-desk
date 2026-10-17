@@ -12,9 +12,11 @@ window.App = (() => {
     m && m.onShow && m.onShow();
   }
 
-  const mediaUrl = (file) => `http://127.0.0.1:${port}/media/${encodeURIComponent(file)}`;
+  // The phone app keeps images in IndexedDB (web/dm-bridge.js); the desktop app serves them from the player server.
+  const mediaUrl = (file) => dm.mediaUrl ? dm.mediaUrl(file) : `http://127.0.0.1:${port}/media/${encodeURIComponent(file)}`;
 
   async function init() {
+    if (dm.isWeb) document.body.classList.add('web');
     const info = await dm.server.info();
     port = info.port;
     App.players = info.players;

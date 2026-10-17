@@ -251,6 +251,53 @@ function registerIpc() {
     if (path.resolve(dir) === path.resolve(config.vault) && win) win.setTitle(`Dungeons Desk — ${String(name).trim()}`);
     return true;
   });
+  // One-file campaign export/import (.ddcampaign.json), the way campaigns move to and from the phone app.
+  ipcMain.handle('campaigns:exportFile', async (_e, dir) => {
+    dir = dir || config.vault;
+    const name = campaignName(dir);
+    const r = await dialog.showSaveDialog(win, { title: 'Export campaign', defaultPath: path.join(app.getPath('downloads'), `${name.replace(/[\\/:*?"<>|]/g, '') || 'Campaign'}.ddcampaign.json`), filters: [{ name: 'Dungeons Desk campaign', extensions: ['json'] }] });
+    if (r.canceled || !r.filePath) return null;
+    const data = { format: 'dungeons-desk-campaign', version: 1, name, exported: new Date().toISOString(), folders: [], notes: {}, state: {}, media: {}, attachments: {} };
+    const mime = (f) => ({ jpg: 'jpeg', svg: 'svg+xml' }[path.extname(f).slice(1).toLowerCase()] || path.extname(f).slice(1).toLowerCase());
+    const walk = (d, rel) => {
+      for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+        if (e.name.startsWith('.')) continue;
+        const r2 = rel ? rel + '/' + e.name : e.name, full = path.join(d, e.name);
+        if (e.isDirectory()) { data.folders.push(r2); walk(full, r2); }
+        else if (/\.md$/i.test(e.name)) data.notes[r2] = fs.readFileSync(full, 'utf8');
+        else if (IMAGE_EXT.test(e.name)) data.attachments[r2] = `data:image/${mime(e.name)};base64,${fs.readFileSync(full).toString('base64')}`;
+      }
+    };
+    walk(dir, '');
+    try { data.state = JSON.parse(fs.readFileSync(path.join(dir, '.dmtools', 'state.json'), 'utf8')); } catch { /* no state yet */ }
+    const media = path.join(dir, '.dmtools', 'media');
+    if (fs.existsSync(media)) for (const f of fs.readdirSync(media)) if (/\.(png|jpe?g|gif|webp)$/i.test(f)) data.media[f] = `data:image/${mime(f)};base64,${fs.readFileSync(path.join(media, f)).toString('base64')}`;
+    fs.writeFileSync(r.filePath, JSON.stringify(data));
+    return r.filePath;
+  });
+  ipcMain.handle('campaigns:importFile', async () => {
+    const r = await dialog.showOpenDialog(win, { title: 'Import a campaign file', properties: ['openFile'], filters: [{ name: 'Dungeons Desk campaign', extensions: ['json'] }] });
+    if (r.canceled || !r.filePaths[0]) return null;
+    let data;
+    try { data = JSON.parse(fs.readFileSync(r.filePaths[0], 'utf8')); } catch { throw new Error('That file couldn\'t be read.'); }
+    if (!data || data.format !== 'dungeons-desk-campaign') throw new Error('That isn\'t a Dungeons Desk campaign file.');
+    const base = String(data.name || '').replace(/[\\/:*?"<>|]/g, '').trim() || 'Imported campaign';
+    let clean = base, i = 2;
+    while (fs.existsSync(path.join(CAMPAIGNS_DIR, clean)) && fs.readdirSync(path.join(CAMPAIGNS_DIR, clean)).length) clean = `${base} ${i++}`;
+    const dir = path.join(CAMPAIGNS_DIR, clean);
+    // Every path stays inside the new folder, the same check safe() makes for the open vault.
+    const inside = (rel) => { const full = path.resolve(dir, String(rel)); if (!full.startsWith(path.resolve(dir) + path.sep)) throw new Error('Bad path in campaign file: ' + rel); return full; };
+    const dataUrl = (u) => { const m = /^data:image\/[\w.+-]+;base64,(.+)$/.exec(String(u)); return m ? Buffer.from(m[1], 'base64') : null; };
+    fs.mkdirSync(path.join(dir, '.dmtools', 'media'), { recursive: true });
+    fs.writeFileSync(path.join(dir, '.dmtools', 'campaign.json'), JSON.stringify({ name: clean, created: Date.now() }, null, 2));
+    for (const f of data.folders || []) fs.mkdirSync(inside(f), { recursive: true });
+    for (const [rel, text] of Object.entries(data.notes || {})) { if (!/\.md$/i.test(rel)) continue; const full = inside(rel); fs.mkdirSync(path.dirname(full), { recursive: true }); fs.writeFileSync(full, String(text)); }
+    for (const [rel, u] of Object.entries(data.attachments || {})) { const buf = dataUrl(u); if (!buf || !IMAGE_EXT.test(rel)) continue; const full = inside(rel); fs.mkdirSync(path.dirname(full), { recursive: true }); fs.writeFileSync(full, buf); }
+    for (const [f, u] of Object.entries(data.media || {})) { const buf = dataUrl(u); if (buf && /\.(png|jpe?g|gif|webp)$/i.test(f)) fs.writeFileSync(path.join(dir, '.dmtools', 'media', path.basename(f)), buf); }
+    if (data.state && typeof data.state === 'object') fs.writeFileSync(path.join(dir, '.dmtools', 'state.json'), JSON.stringify(data.state, null, 2));
+    switchVault(dir);
+    return dir;
+  });
   ipcMain.handle('campaigns:reveal', (_e, dir) => shell.openPath(dir || config.vault));
   ipcMain.handle('vault:reveal', () => shell.openPath(config.vault));
 

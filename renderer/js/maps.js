@@ -190,7 +190,7 @@ window.Maps = (() => {
         h('h3', 'Map'),
         h('div.row',
           h('button.small', { onclick: async () => { const n = await U.prompt('Rename map', m.name); if (n) { m.name = n; save(); drawList(); } } }, '✏ Rename'),
-          h('button.small', { onclick: () => dm.server.openDisplay() }, '🖥 TV window'),
+          dm.isWeb ? null : h('button.small', { onclick: () => dm.server.openDisplay() }, '🖥 TV window'),
           h('button.small.danger', { onclick: async () => { if (await U.confirm('Delete map', `Delete “${m.name}”? (The image file is kept.)`)) { Store.get().maps = maps().filter(x => x !== m); Store.get().activeMap = maps()[0] && maps()[0].id; save(); drawAll(); } } }, '🗑 Delete'))));
   }
 

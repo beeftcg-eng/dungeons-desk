@@ -388,8 +388,9 @@
   function meBox() {
     if (meBoxEl) return meBoxEl;
     const box = meBoxEl = document.createElement('div'); box.id = 'mebox';
-    box.innerHTML = '<div class="card" id="tokcard"></div><div class="card"><div style="display:flex;justify-content:space-between;align-items:center"><b>📝 My notes</b><span class="saved" id="saved"></span></div><p style="color:var(--dim);font-size:13px;margin:4px 0 8px">Only you see these. They\'re saved on the DM\'s computer so they\'re here next session.</p><textarea class="mynotes" placeholder="Names, clues, loot, things to remember…"></textarea></div><button class="btn" id="replaytour" style="width:100%;margin-bottom:16px">❓ Show the tour again</button>';
+    box.innerHTML = '<div class="card" id="tokcard"></div><div class="card"><div style="display:flex;justify-content:space-between;align-items:center"><b>📝 My notes</b><span class="saved" id="saved"></span></div><p style="color:var(--dim);font-size:13px;margin:4px 0 8px">Only you see these. They\'re saved on the DM\'s computer so they\'re here next session.</p><textarea class="mynotes" placeholder="Names, clues, loot, things to remember…"></textarea></div><div class="card" id="charfile"><b>📜 Character file</b><p style="color:var(--dim);font-size:13px;margin:4px 0 10px">Made your character in the Dungeons Desk character sheet app? Import it here. Or save this sheet to keep using it there.</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-cf="import">⇩ Import my sheet</button><button class="btn" data-cf="export">⬇ Save my sheet</button></div></div><button class="btn" id="replaytour" style="width:100%;margin-bottom:16px">❓ Show the tour again</button>';
     box.querySelector('#replaytour').addEventListener('click', startTour);
+    box.querySelector('#charfile').addEventListener('click', (e) => { const a = e.target.dataset.cf; if (a === 'import') importSheet(); else if (a === 'export') exportSheet(); });
     box.querySelector('.mynotes').addEventListener('input', (e) => {
       $('#saved').textContent = 'Saving…';
       clearTimeout(notesTimer);
@@ -406,6 +407,28 @@
   }
   function shareToDm(sh) {
     return fetch('/api/share' + qs(), { method: 'POST', body: JSON.stringify({ share: sh }) }).then(r => r.ok);
+  }
+  const toast = (t) => { document.querySelectorAll('.cs-toast').forEach(x => x.remove()); const el = document.createElement('div'); el.className = 'cs-toast'; el.textContent = t; document.body.append(el); setTimeout(() => el.remove(), 2800); };
+  // Character files (CharSheet.toFile) from the standalone sheet app. Importing sends the sheet to the DM like any edit.
+  function exportSheet() {
+    if (!sheet || !data.card) return toast('Your sheet appears here once the DM adds you to the party');
+    const f = new Blob([JSON.stringify(CharSheet.toFile({ ...sheet.get(), name: data.card.name }))], { type: 'application/json' });
+    const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(f), download: CharSheet.fileName(data.card.name) });
+    document.body.append(a); a.click(); a.remove();
+  }
+  function importSheet() {
+    if (!sheet || !data.card) return toast('Ask the DM to add your character to the party first');
+    const inp = Object.assign(document.createElement('input'), { type: 'file', accept: '.json,application/json' });
+    inp.onchange = async () => {
+      if (!inp.files[0]) return;
+      let c;
+      try { c = CharSheet.fromFile(await inp.files[0].text()); } catch (e) { return toast(e.message); }
+      if (!confirm(`Replace your sheet with ${c.name || 'the one in this file'}? Your name in the game stays ${data.card.name}.`)) return;
+      sheet.set({ ...c.model, name: data.card.name }, liveOf(data.card));
+      sendSheet(c.model);
+      toast('Sheet imported and sent to the DM');
+    };
+    inp.click();
   }
   function renderMe() {
     const el = $('#char'), c = data.card, box = meBox();
@@ -561,7 +584,7 @@
     { tab: 'handouts', icon: '✉', title: () => 'Handouts', body: 'Letters, clues, wanted posters and secrets from the DM pop up here, and some are just for you. A red badge means something new.' },
     { tab: 'wiki', icon: '📚', title: () => 'Wiki', body: 'People, places and lore the DM has shared with the party. Tap a highlighted name to jump to that page.' },
     { tab: 'map', icon: '🗺', title: () => 'Map', body: 'When the DM shows a map:<ul><li><b>✋ Move</b>: drag your own token. Fog clears as you explore.</li><li><b>📏 Measure</b>: drag to measure (1 square = 5 ft).</li><li><b>📍 Ping</b>: tap to point something out.</li></ul>Pinch to zoom, drag to look around.' },
-    { tab: 'char', icon: '📜', title: () => 'Your character sheet', body: 'Your whole character: stats, attacks, spells, gear and features. Tap <b>✏ Edit</b> to set it up; picking your class and level fills in the rest.<ul><li><b>Tap a save, skill, attack or spell</b> to roll it. The DM sees the result.</li><li><b>📤 Show the DM</b> sends them a spell, feature or item.</li></ul>Your token picture and private notes are under <b>📝 Notes</b>.' },
+    { tab: 'char', icon: '📜', title: () => 'Your character sheet', body: 'Your whole character: stats, attacks, spells, gear and features. Tap <b>✏ Edit</b> to set it up; picking your class and level fills in the rest.<ul><li><b>Tap a save, skill, attack or spell</b> to roll it. The DM sees the result.</li><li><b>📤 Show the DM</b> sends them a spell, feature or item.</li></ul>Your token picture and private notes are under <b>📝 Notes</b>, along with <b>⇩ Import my sheet</b> for a character you made in the Dungeons Desk character sheet app.' },
     { tab: 'turns', icon: '🎲', title: () => 'You\'re all set!', body: 'Tip: add this page to your home screen (browser menu → "Add to Home screen") so it\'s one tap away next session. You can replay this tour from the 👤 Me tab.' },
   ];
   let tourStep = -1;

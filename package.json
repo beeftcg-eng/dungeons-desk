@@ -5,6 +5,8 @@
   "main": "main.js",
   "scripts": {
     "start": "electron . --no-sandbox",
+    "build:web": "node scripts/build-web.js",
+    "web": "node scripts/build-web.js --serve",
     "dist": "electron-builder",
     "dist:linux": "electron-builder --linux",
     "dist:win": "electron-builder --win",

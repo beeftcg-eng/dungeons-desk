@@ -33,7 +33,7 @@ window.Rules = (() => {
     els.sources = h('div.seg-group.ref-sources', [['all', 'Everything'], ['hb', '★ My campaign'], ['srd', 'SRD']].map(([k, l]) =>
       h('button.seg' + (k === source ? '.on' : ''), { 'data-s': k, onclick: () => { source = k; U.$$('.seg', els.sources).forEach(b => b.classList.toggle('on', b.dataset.s === k)); draw(); } }, l)));
     els.detail = h('div.ref-detail');
-    root.append(h('div.page.page-flush', h('div.ref-layout',
+    root.append(h('div.page.page-flush', els.layout = h('div.ref-layout',
       h('aside.ref-side', h('div.ref-head',
         h('div.row', h('h2', '📖 Rules'), h('span.grow'), h('button.small.primary', { onclick: Homebrew.newDialog, title: 'Create your own monster, spell or item' }, '+ Homebrew'), h('button.small', { onclick: () => Importer.open(), title: 'Paste from D&D Beyond / PDFs, search Open5e, or import a file' }, '📥 Import')),
         els.q, els.sources, els.cats, els.filters), els.list,
@@ -83,6 +83,7 @@ window.Rules = (() => {
   }
 
   function showEmpty() {
+    els.layout.classList.remove('m-detail');
     els.detail.innerHTML = '';
     els.detail.append(h('div.empty-state', h('div.big', '📖'), h('h2', 'Rules at your fingertips'),
       h('p', `${R.monsters.length} monsters, ${R.spells.length} spells, ${R.items.length} magic items, every condition, and the core rules from the free 5e System Reference Document.`)));
@@ -93,6 +94,8 @@ window.Rules = (() => {
   function showDetail(e) {
     const x = e.x;
     els.detail.innerHTML = '';
+    els.layout.classList.add('m-detail');
+    els.detail.append(U.mBack(els.layout));
     const hbBar = e.hb ? h('div.hb-banner', '★ Homebrew in this campaign', h('span.dim', ` · ${x._source || x.source || 'Homebrew'}`), h('span.grow'),
       h('button.small', { onclick: () => Notes.open(x._path || x.path) }, '📜 Open / edit note')) : null;
     const copyBtn = (label, fn) => e.hb ? null : h('button', { onclick: fn, title: 'Make an editable copy that lives in this campaign' }, label);

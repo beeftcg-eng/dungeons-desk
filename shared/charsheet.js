@@ -311,11 +311,12 @@ window.CharSheet = (() => {
   }
 
   // ---------- The interactive sheet ----------
-  // opts: { model, live, mode: 'player'|'dm', onChange(model), onShare(share) → Promise, toast(text), extraTabs: [{id, label, el}] }
+  // opts: { model, live, mode: 'player'|'dm'|'solo', onChange(model), onShare(share) → Promise, toast(text), extraTabs: [{id, label, el}] }
+  // 'solo' is the standalone sheet with no DM: it rolls on the phone itself and has nobody to show cards to.
   function mount(root, opts) {
     let model = prepare(opts.model || {}), live = opts.live || null, name = (opts.model || {}).name || '';
     let tab = 'main', edit = false, pending = null, dlg = null, spellFilter = 'class';
-    const player = opts.mode !== 'dm';
+    const solo = opts.mode === 'solo', player = !solo && opts.mode !== 'dm';
     const extras = opts.extraTabs || [];
     const toast = opts.toast || ((t) => { const el = document.createElement('div'); el.className = 'cs-toast'; el.textContent = t; document.body.append(el); setTimeout(() => el.remove(), 2600); });
     root.classList.add('cs');
@@ -326,9 +327,20 @@ window.CharSheet = (() => {
 
     const commit = () => { applyAuto(model); render(); opts.onChange && opts.onChange(model); };
     const share = (sh) => {
+      if (solo) { const s = cleanShare({ id: uid(), ...sh }), e = s && resolve(s); if (e && e.kind !== 'card' && e.kind !== 'hp') showRoll(e); return; }
       const p = opts.onShare ? opts.onShare({ id: uid(), ...sh }) : null;
       if (p && p.then) p.then(ok => { if (ok === false) toast('Not sent: check the connection to the DM'); else if (sh.kind === 'card') toast(player ? 'Sent to the DM' : 'Added to the player feed'); }).catch(() => toast('Not sent: check the connection to the DM'));
     };
+    function showRoll(e) {
+      document.querySelectorAll('.cs-rollpop').forEach(x => x.remove());
+      const pop = document.createElement('div');
+      pop.className = 'cs-rollpop';
+      pop.innerHTML = feedHtml(e);
+      pop.addEventListener('click', () => pop.remove());
+      document.body.append(pop);
+      if (navigator.vibrate && (!navigator.userActivation || navigator.userActivation.hasBeenActive)) navigator.vibrate(e.crit ? [80, 60, 80, 60, 160] : 40);
+      setTimeout(() => { pop.classList.add('out'); setTimeout(() => pop.remove(), 400); }, 8000);
+    }
     const getPath = (path) => !path ? model : path.split('.').reduce((o, k) => o == null ? o : (k[0] === '#' ? o.find(x => x.id === k.slice(1)) : o[k]), model);
     const setPath = (path, v) => { const ks = path.split('.'), last = ks.pop(), o = getPath(ks.join('.')); if (o) o[last] = v; };
 
@@ -1019,5 +1031,18 @@ window.CharSheet = (() => {
       ${e.dmgExpr ? `<div class="cs-feed-dmg">Damage: ${esc(e.dmgExpr)} ${esc(e.dmgType || '')}</div>` : ''}${note}`;
   }
 
-  return { mount, setHomebrew, printHtml, derive, clean, prepare, applyAuto, cleanShare, resolve, rollDice, feedHtml, fmt };
+  // ---------- Character files (.ddchar.json) ----------
+  // How a sheet moves between the phone's standalone sheet, a DM's party (Settings → 📜) and the Me tab in a game.
+  function toFile(m) {
+    const c = clean(m);
+    return { format: 'dungeons-desk-character', version: 1, name: String((m && m.name) || '').slice(0, 60), exported: new Date().toISOString(), model: c };
+  }
+  function fromFile(data) {
+    if (typeof data === 'string') { try { data = JSON.parse(data); } catch { data = null; } }
+    if (!data || data.format !== 'dungeons-desk-character' || !data.model) throw new Error('That isn\'t a Dungeons Desk character file.');
+    return { name: String(data.name || '').slice(0, 60).trim(), model: applyAuto(clean(data.model)) };
+  }
+  const fileName = (name) => `${String(name || 'Character').replace(/[\\/:*?"<>|]/g, '').trim() || 'Character'}.ddchar.json`;
+
+  return { mount, setHomebrew, printHtml, derive, clean, prepare, applyAuto, cleanShare, resolve, rollDice, feedHtml, fmt, toFile, fromFile, fileName };
 })();

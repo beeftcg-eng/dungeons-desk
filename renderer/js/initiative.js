@@ -495,6 +495,10 @@ ${srd.length ? '\n## Stat Blocks\n\n' + srd.map(i => Statblock.fence(i.sb)).join
       const pv = Store.get().playerView;
       App.players = info.players;
       box.innerHTML = '';
+      // The phone app can't host the game for other phones; that's the desktop app's job.
+      if (info.web) return box.append(h('h3', '📱 Players\' phones'),
+        h('p', 'Players\' phones join a game hosted by the Dungeons Desk desktop app on the same Wi-Fi. This phone app is for prep and running the table yourself.'),
+        h('p.dim', 'Players who just want their character sheet can use the phone character sheet, then export it for you to add in Settings → ⇩ Add from a character file.'));
       box.append(h('h3', '📱 Players\' phones'),
         info.urls.length ? [
           h('p', 'Players on the same Wi-Fi scan this or open:'),

@@ -75,6 +75,15 @@ The **Initiative** page shows a QR code and an address like `http://192.168.0.4:
 
 Phones can only view things, apart from each player's own character sheet and notes page, sending you rolls, moving the tokens you've assigned to them, pinging, and uploading their own token. They can't change anything in your game. DM secret boxes, hidden monsters and hidden map tokens are never sent to phones.
 
+## Phone app
+
+**https://beeftcg-eng.github.io/dungeons-desk/** — open it in your phone's browser and **Add to Home Screen** (Safari: Share → Add to Home Screen; Chrome/Android: menu → Add to Home screen / Install app) for a home-screen icon that opens full screen. No app store is needed. It's a PWA (Progressive Web App) rather than an `.apk`, so the same link works on iPhone and Android. It has two parts, and each installs as its own icon:
+
+- **I'm a player** (`sheet/`): just a character sheet, with no DM or game needed. It's the same 2024-rules sheet as the Me tab: build a character, roll from it, level up, print it. Characters are saved on the phone. **💾 File → 📤 Share file** sends one to the DM, who adds it with **⚙ Settings → Party → ⇩ Add from a character file**. A player who's already in the party can also import it from **👤 Me → ⇩ Import my sheet** in the game.
+- **I'm the DM** (`dm/`): the desktop app's tools in a phone layout, with the tools in a bar along the bottom. Campaigns are kept on the phone. **⇧ Export** saves a campaign as one `.ddcampaign.json` file, and **⇩ Import a campaign file…** opens it, on either app, to move a campaign between the desktop and the phone. The phone app can't host the players' LAN game or the TV window; those need the desktop app.
+
+Both work offline once opened, and update themselves.
+
 ## Files
 
 - Notes are plain `.md` files in the vault, so you can back them up, sync them, or open the vault in Obsidian.
@@ -91,6 +100,7 @@ npm start
 
 - `npm test` checks the character sheet rules (AC, HP, multiclass spell slots…) against worked examples in `scripts/test-charsheet.js`.
 - `npm run dist:linux` / `npm run dist:win` builds installers locally into `dist/`.
+- `npm run web` builds the phone app into `dist-web/` and serves it at http://localhost:8077/ (`npm run build:web` only builds). `.github/workflows/deploy-pages.yml` publishes it to GitHub Pages on every push to `main`.
 - **Publishing an update:** `npm run release -- patch "What changed"`. Use `minor` or `major` for bigger changes. This bumps the version, tags it and pushes. GitHub Actions (`.github/workflows/release.yml`) then builds the Windows installer and the Linux AppImage and publishes them as a release. Installed copies pick the update up from there.
 
 ## Credits

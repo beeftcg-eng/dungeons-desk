@@ -19,7 +19,7 @@ window.Handouts = (() => {
     els.list = h('div.ho-list');
     els.editor = h('div.ho-editor');
     root.append(h('div.page.page-flush',
-      h('div.ho-layout',
+      els.layout = h('div.ho-layout',
         h('aside.ho-side',
           h('div.side-head', h('h2', 'Handouts'), h('button.primary.small', { onclick: newHandout }, '+ New')),
           els.list),
@@ -61,6 +61,8 @@ window.Handouts = (() => {
   function drawEditor() {
     const x = cur();
     els.editor.innerHTML = '';
+    els.layout.classList.toggle('m-detail', !!x);
+    if (x) els.editor.append(U.mBack(els.layout, () => { selected = null; draw(); }));
     if (!x) { els.editor.append(h('div.empty-state', h('div.big', '✉'), h('h2', 'Player handouts'), h('p', 'Write a letter, journal page or wanted poster, then reveal it on your players\' phones.'), h('button.primary', { onclick: newHandout }, '+ New handout'))); return; }
 
     const preview = h('div.ho-preview');
@@ -116,10 +118,9 @@ window.Handouts = (() => {
 
   async function printIt(mode) {
     const x = cur(); if (!x) return;
-    const base = location.href.replace(/renderer\/index\.html.*$/, '');
     const html = `<!doctype html><html><head><meta charset="utf-8">
       <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Libre+Baskerville&family=IM+Fell+English:ital@0;1&family=Caveat:wght@500&family=Homemade+Apple&family=Special+Elite&family=UnifrakturMaguntia&display=swap">
-      <link rel="stylesheet" href="${base}shared/handout.css">
+      <link rel="stylesheet" href="${new URL('../shared/handout.css', location.href)}">
       <style>@page{size:letter;margin:.5in} body{margin:0;padding:30px 0;-webkit-print-color-adjust:exact;print-color-adjust:exact} .handout{box-shadow:none}</style></head>
       <body>${renderHandout({ ...x, bodyHtml: MD.simple(x.body), imageUrl: x.image ? App.mediaUrl(x.image) : null })}</body></html>`;
     await new Promise(r => setTimeout(r, 0));

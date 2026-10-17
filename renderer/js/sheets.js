@@ -121,7 +121,9 @@ window.Sheets = (() => {
     const box = h('div.sheet-host');
     const print = (mode) => dm.print.html(CharSheet.printHtml(modelOf(p)), mode, `${p.name} character sheet.pdf`).then(r => { if (r && mode === 'pdf') toast('Saved ' + r); });
     const m = U.modal(`📜 ${p.name}`, [h('div.row', h('p.dim.small.grow', `Changes are saved and show up on ${p.player || p.name}'s phone. Rolls you make here stay on your screen.`),
-      h('button.small', { onclick: () => print('print') }, '🖨 Print'), h('button.small', { onclick: () => print('pdf') }, '📄 Save as PDF')), box],
+      h('button.small', { onclick: () => print('print') }, '🖨 Print'), dm.isWeb ? null : h('button.small', { onclick: () => print('pdf') }, '📄 Save as PDF'),
+      h('button.small', { title: 'Replace this sheet with a character file (.ddchar.json)', onclick: () => importInto(p) }, '⇩ Import'),
+      h('button.small', { title: 'Save this sheet as a character file the player can open in the phone character sheet', onclick: () => exportSheet(p) }, '⇧ Export')), box],
       { onClose: () => { if (open) open.api.destroy(); open = null; } });
     box.closest('.modal').classList.add('sheet-modal');
     const api = CharSheet.mount(box, {
@@ -130,6 +132,36 @@ window.Sheets = (() => {
       onShare: (sh) => { handle(p.name, sh, true); return Promise.resolve(true); },
     });
     open = { p, api, modal: m };
+  }
+
+  // ---------- Character files (CharSheet.toFile / fromFile) ----------
+  async function readCharFile() {
+    const f = await U.pickFile('.json,application/json');
+    if (!f) return null;
+    try { return CharSheet.fromFile(await f.text()); } catch (e) { toast(e.message, 'err'); return null; }
+  }
+  function exportSheet(p) {
+    U.download(new Blob([JSON.stringify(CharSheet.toFile(modelOf(p)))], { type: 'application/json' }), CharSheet.fileName(p.name));
+  }
+  async function importInto(p) {
+    const c = await readCharFile();
+    if (!c) return;
+    if (!await U.confirm('Replace sheet', `Replace ${p.name}'s sheet with ${c.name ? `“${c.name}”` : 'the one in this file'}? The name, player and token stay as they are.`)) return;
+    apply(p, c.model);
+    if (open && open.p === p) open.api.set(modelOf(p), liveOf(p));
+    toast('Sheet imported');
+  }
+  // Settings → "Add from a character file": a new party member from a player's exported sheet.
+  async function importNew() {
+    const c = await readCharFile();
+    if (!c) return false;
+    let name = c.name || 'New character', i = 2;
+    while (member(name)) name = `${c.name || 'New character'} ${i++}`;
+    const p = { name, player: '', token: null };
+    party().push(p);
+    apply(p, c.model);
+    toast(`Added ${name} to the party`);
+    return true;
   }
 
   // Keep an open sheet in step with initiative (HP, conditions) and Settings.
@@ -168,5 +200,5 @@ window.Sheets = (() => {
     dm.onPlayerAction(playerAction);
   }
 
-  return { mount, open: openSheet, playerFeed, playerHomebrew, refreshOpen, syncFromCombat, numbers };
+  return { mount, open: openSheet, importNew, playerFeed, playerHomebrew, refreshOpen, syncFromCombat, numbers };
 })();

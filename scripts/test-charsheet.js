@@ -128,6 +128,17 @@ test('HP reports and tags survive cleanShare()', () => {
   assert.strictEqual(CS.cleanShare({ kind: 'roll', expr: '1d20+2', tag: 'init' }).tag, 'init');
   assert.strictEqual(CS.cleanShare({ kind: 'roll', expr: '1d20', tag: 'hack' }).tag, undefined);
 });
+test('Character files round-trip and reject other JSON', () => {
+  const m = CS.applyAuto(CS.clean(pc({ cls: 'Fighter', level: 3 }, { species: 'Dwarf', items: [{ name: 'Longsword', equipped: true }] })));
+  const file = JSON.parse(JSON.stringify(CS.toFile({ ...m, name: 'Thorin' })));
+  assert.strictEqual(file.format, 'dungeons-desk-character');
+  const back = CS.fromFile(JSON.stringify(file));
+  assert.strictEqual(back.name, 'Thorin');
+  assert.deepStrictEqual(back.model, m);
+  assert.throws(() => CS.fromFile('{"format":"dungeons-desk-campaign"}'));
+  assert.throws(() => CS.fromFile('not json'));
+  assert.strictEqual(CS.fileName('Thorin: the "Bold"'), 'Thorin the Bold.ddchar.json');
+});
 
 if (require.main === module) console.log(process.exitCode ? 'Some checks failed.' : `All ${passed} checks passed.`);
 module.exports = { test, pc, d, CS, assert };

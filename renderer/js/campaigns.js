@@ -27,7 +27,8 @@ window.Campaigns = (() => {
       h('label.field', h('span', 'Campaign name'), name),
       h('label.chk', guide, ' Include the how-to guide (a Guide folder explaining every feature)'),
       h('label.chk', examples, ' Include the example notes (goblins, Oakhaven, homebrew…)'),
-      h('p.hint', 'Creates a fresh folder in Documents/Dungeons Desk Campaigns with an overview note and folders for NPCs, locations, lore and more. Your current campaign is saved and stays in the campaign list.'),
+      h('p.hint', dm.isWeb ? 'Creates a fresh campaign on this device with an overview note and folders for NPCs, locations, lore and more. Your current campaign is saved and stays in the campaign list.'
+        : 'Creates a fresh folder in Documents/Dungeons Desk Campaigns with an overview note and folders for NPCs, locations, lore and more. Your current campaign is saved and stays in the campaign list.'),
       h('div.row.end', h('button', { onclick: () => m.close() }, 'Cancel'), h('button.primary', { onclick: create }, '✨ Create campaign')),
     ]);
   }
@@ -38,19 +39,35 @@ window.Campaigns = (() => {
     const list = h('div.camp-list', info.campaigns.map(c => h('div.camp-card' + (c.current ? '.current' : '') + (c.exists ? '' : '.missing'),
       h('div.camp-main', { onclick: () => { if (!c.current && c.exists) switchTo(() => dm.campaigns.open(c.path)); } },
         h('div.camp-name', c.name, c.current ? h('span.chip.live', 'Open now') : null, !c.exists ? h('span.chip', 'Folder missing') : null),
-        h('div.dim.small', c.path), h('div.dim.small', 'Last opened ' + when(c.lastOpened))),
+        dm.isWeb ? null : h('div.dim.small', c.path), h('div.dim.small', 'Last opened ' + when(c.lastOpened))),
       h('div.camp-actions',
         c.exists && !c.current ? h('button.primary.small', { onclick: () => switchTo(() => dm.campaigns.open(c.path)) }, 'Open') : null,
         c.exists ? h('button.icon', { title: 'Rename', onclick: async () => { const n = await U.prompt('Rename campaign', c.name); if (n) { await dm.campaigns.rename(c.path, n); m.close(); open(); refreshRail(); } } }, '✏') : null,
-        c.exists ? h('button.icon', { title: 'Show folder', onclick: () => dm.campaigns.reveal(c.path) }, '📂') : null,
-        !c.current ? h('button.icon', { title: 'Remove from this list (files are kept)', onclick: async () => { await dm.campaigns.forget(c.path); m.close(); open(); } }, '✕') : null))));
+        c.exists && !dm.isWeb ? h('button.icon', { title: 'Show folder', onclick: () => dm.campaigns.reveal(c.path) }, '📂') : null,
+        c.exists ? h('button.icon', { title: 'Export as a campaign file (to move it to another device)', onclick: () => exportFile(c.path) }, '⇧') : null,
+        !c.current && !dm.isWeb ? h('button.icon', { title: 'Remove from this list (files are kept)', onclick: async () => { await dm.campaigns.forget(c.path); m.close(); open(); } }, '✕') : null,
+        // The phone app has no folder that outlives the list, so removing a campaign deletes it.
+        !c.current && dm.isWeb ? h('button.icon', { title: 'Delete this campaign from this device', onclick: async () => {
+          if (!await U.confirm('Delete campaign', `Delete “${c.name}” from this device? Export it first (⇧) if you want to keep a copy.`)) return;
+          await dm.campaigns.forget(c.path); m.close(); open();
+        } }, '🗑') : null))));
     const m = U.modal('Campaigns', [
       h('div.row', h('button.primary.big', { onclick: () => { m.close(); newCampaign(); } }, '✨ New campaign'),
-        h('button.big', { onclick: () => switchTo(() => dm.campaigns.browse().then(r => { if (!r) throw new Error('No folder chosen'); })) }, '📂 Open a campaign folder…')),
+        dm.isWeb ? null : h('button.big', { onclick: () => switchTo(() => dm.campaigns.browse().then(r => { if (!r) throw new Error('No folder chosen'); })) }, '📂 Open a campaign folder…'),
+        h('button.big', { title: 'A .ddcampaign.json file exported from Dungeons Desk on another computer or phone', onclick: importFile }, '⇩ Import a campaign file…')),
       h('h4', 'Your campaigns'),
       list,
     ], { wide: false });
   }
+
+  // Campaign files (.ddcampaign.json) carry the notes, images and app state between the desktop and phone apps.
+  async function exportFile(id) {
+    await Notes.flush();
+    await Store.saveNow();
+    try { const r = await dm.campaigns.exportFile(id); if (r && typeof r === 'string') toast('Saved ' + r); else if (r) toast('Campaign file downloaded'); }
+    catch (e) { toast('Export failed: ' + String(e.message).replace(/^.*Error: /, ''), 'err'); }
+  }
+  const importFile = () => switchTo(() => dm.campaigns.importFile().then(r => { if (!r) throw new Error('No file chosen'); }));
 
   async function refreshRail() {
     const info = await dm.campaigns.list();
@@ -58,5 +75,5 @@ window.Campaigns = (() => {
     if (el) { el.textContent = info.currentName; el.parentElement.title = `Campaign: ${info.currentName}\nClick to switch or start a new one`; }
   }
 
-  return { open, newCampaign, refreshRail };
+  return { open, newCampaign, refreshRail, exportFile, importFile };
 })();

@@ -112,8 +112,23 @@ window.U = (() => {
 
   const readFileAsDataUrl = (file) => new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(file); });
   const copy = (text) => navigator.clipboard.writeText(text).then(() => toast('Copied to clipboard'));
+  // Pick a file (resolves null if nothing was chosen) and save one, in Electron and in the phone app alike.
+  const pickFile = (accept) => new Promise((res) => {
+    const inp = h('input', { type: 'file', accept, style: 'display:none' });
+    inp.addEventListener('change', () => { res(inp.files[0] || null); inp.remove(); });
+    document.body.append(inp); inp.click();
+  });
+  function download(blob, name) {
+    const a = h('a', { href: URL.createObjectURL(blob), download: name, style: 'display:none' });
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 30000);
+  }
 
-  return { $, $$, esc, uid, rand, pick, pickN, clamp, cap, debounce, mod, sign, roll, r, rollInline, h, toast, modal, prompt, confirm, readFileAsDataUrl, copy };
+  // Phone layout: list/detail views show one side at a time. The layout gets .m-detail while an item is open, and
+  // this button (only visible at phone width) goes back to the list.
+  const mBack = (layout, onBack) => h('button.m-back', { title: 'Back to the list', onclick: () => { layout.classList.remove('m-detail'); onBack && onBack(); } }, '‹ Back');
+
+  return { mBack, $, $$, esc, uid, rand, pick, pickN, clamp, cap, debounce, mod, sign, roll, r, rollInline, h, toast, modal, prompt, confirm, readFileAsDataUrl, copy, pickFile, download };
 })();
 
 // ---------- Persistent app state (stored in <vault>/.dmtools/state.json) ----------

@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<!--HEAD-->
+<title>Character Sheet · Dungeons Desk</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&display=swap">
+<link rel="stylesheet" href="../shared/charsheet.css">
+<style>
+  :root { color-scheme: dark; --bg: #17141f; --bg2: #1d1927; --panel: #262134; --panel2: #2e283f; --line: #3b3450; --text: #e8e2f0; --dim: #9d94b3; --accent: #e0a458; --accent-ink: #1b1408; --red: #d9443a; --green: #4caf50; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; min-height: 100%; }
+  button, input { font: inherit; }
+  header { position: sticky; top: 0; z-index: 5; background: rgba(23,20,31,.95); backdrop-filter: blur(6px); border-bottom: 1px solid var(--line);
+    padding: calc(10px + env(safe-area-inset-top)) 16px 10px; display: flex; align-items: center; gap: 10px; }
+  header h1 { font-family: 'Cinzel', serif; font-size: 18px; margin: 0; color: var(--accent); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  header button { background: none; border: 1px solid var(--line); border-radius: 14px; padding: 5px 12px; color: var(--text); font-size: 14px; }
+  main { max-width: 760px; margin: 0 auto; padding: 14px 12px calc(40px + env(safe-area-inset-bottom)); }
+  .btn { background: var(--panel2); border: 1px solid var(--line); color: var(--text); border-radius: 10px; padding: 10px 14px; font-size: 15px; cursor: pointer; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+  .btn.danger { color: #ff8a80; border-color: #6b2a2a; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .hint { color: var(--dim); font-size: 14px; line-height: 1.45; }
+  .chars { display: grid; gap: 10px; margin: 14px 0; }
+  .char { display: flex; align-items: center; gap: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; cursor: pointer; text-align: left; color: var(--text); width: 100%; }
+  .char:hover { border-color: var(--accent); }
+  .char .av { width: 44px; height: 44px; border-radius: 50%; background: var(--panel2); border: 2px solid var(--accent); display: flex; align-items: center; justify-content: center; font: 700 18px Cinzel, serif; color: var(--accent); flex: none; }
+  .char b { display: block; font-size: 17px; }
+  .char small { color: var(--dim); }
+  .empty { text-align: center; padding: 30px 10px 10px; }
+  .empty .big { font-size: 54px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; margin: 0 0 12px; }
+  .card h3 { margin: 0 0 6px; font-size: 16px; }
+  .card .btn { margin-top: 6px; }
+  .toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: var(--panel2); border: 1px solid var(--accent); border-radius: 18px; padding: 9px 16px; z-index: 90; font-size: 14px; box-shadow: 0 8px 24px rgba(0,0,0,.5); }
+  .toast.err { border-color: var(--red); }
+</style>
+</head>
+<body>
+<header><h1 id="title">Character Sheet</h1><button id="list-btn" hidden>☰ Characters</button></header>
+<main id="main"></main>
+<script src="../web/sw-register.js"></script>
+<script src="../shared/charsheet-data.js"></script>
+<script src="../shared/charsheet.js"></script>
+<script src="../web/sheet.js"></script>
+</body>
+</html>

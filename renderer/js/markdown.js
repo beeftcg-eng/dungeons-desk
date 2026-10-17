@@ -11,6 +11,7 @@ window.MD = (() => {
   function imageUrl(rel) {
     rel = rel.replace(/^\/+/, '');
     if (ctx.players) { ctx.players.images.add(rel); return '/wiki-img/' + rel.split('/').map(encodeURIComponent).join('/'); }
+    if (window.dm.vaultUrl) return window.dm.vaultUrl(rel);
     return 'vault://local/' + rel.split('/').map(encodeURIComponent).join('/');
   }
   // ![[name.png]] may give just a file name; find it anywhere in the vault like Obsidian does.

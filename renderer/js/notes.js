@@ -146,7 +146,9 @@ window.Notes = (() => {
     const modeBtn = (m, label, title) => h('button.seg' + (mode === m ? '.on' : ''), { 'data-mode': m, title, onclick: () => setMode(m) }, label);
     const fmt = (label, title, fn) => h('button.fmt', { title, onclick: () => { fn(); els.editor.focus(); } }, label);
 
+    els.layout = h('div.notes-layout');
     els.toolbar = h('div.note-toolbar',
+      U.mBack(els.layout),
       h('button.icon', { title: 'Back', onclick: back }, '←'),
       els.title,
       h('button.small.insert-btn', { title: 'Insert a format, block or random content (or type / at the start of a line)', onmousedown: (e) => e.preventDefault(),
@@ -171,7 +173,7 @@ window.Notes = (() => {
       h('button.icon', { title: 'Delete note', onclick: deleteCurrent }, '🗑'),
     );
 
-    root.append(h('div.notes-layout',
+    els.layout.append(
       h('aside.notes-side',
         h('div.side-head',
           h('button.primary.small', { onclick: () => pickTemplate() }, '+ New note'),
@@ -180,7 +182,8 @@ window.Notes = (() => {
           h('button.icon', { title: 'Quick switcher (Ctrl+O)', onclick: quickSwitch }, '🔍')),
         els.search, els.tree),
       h('div.notes-main', els.toolbar, h('div.editor-area', els.wrap, els.ac, els.empty)),
-      els.info));
+      els.info);
+    root.append(els.layout);
 
     els.editor.addEventListener('input', () => { dirty = true; renderPreviewSoon(); saveSoon(); autocomplete(); });
     els.imgFile = h('input', { type: 'file', accept: 'image/*', multiple: true, style: 'display:none', onchange: async (e) => { await insertImages(e.target.files); e.target.value = ''; } });
@@ -201,7 +204,8 @@ window.Notes = (() => {
     refresh().then(() => {
       const last = localStorage.getItem('notes.last');
       const w = last && cache.has(last) ? last : (notes.find(n => /start here/i.test(n.name)) || notes.find(n => /welcome/i.test(n.name)) || {}).path;
-      if (w) open(w, { push: false, reveal: false });
+      // On a phone the app starts on the list of notes, with the last one a tap away.
+      if (w) open(w, { push: false, reveal: false }).then(() => els.layout.classList.remove('m-detail'));
     });
   }
 
@@ -210,6 +214,7 @@ window.Notes = (() => {
     els.toolbar.style.visibility = on ? '' : 'hidden';
     els.empty.style.display = on ? 'none' : '';
     els.info.style.display = on ? '' : 'none';
+    els.layout.classList.toggle('m-detail', on);
   }
 
   function setMode(m) {
