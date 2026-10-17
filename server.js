@@ -121,11 +121,12 @@ class PlayerServer {
     }
 
     // Player actions: POST /api/move {map, token, x, y}, /api/ping {map, x, y}, /api/token {dataUrl},
-    // /api/sheet {model} (the player's own character sheet), /api/share {share} (a roll or a card for the DM).
-    if (req.method === 'POST' && ['/api/move', '/api/ping', '/api/token', '/api/sheet', '/api/share'].includes(p)) {
+    // /api/sheet {model} (the player's own character sheet), /api/share {share} (a roll or a card for the DM),
+    // /api/offer {name, model} (a character file for the DM to add to the party; nothing changes until they accept).
+    if (req.method === 'POST' && ['/api/move', '/api/ping', '/api/token', '/api/sheet', '/api/share', '/api/offer'].includes(p)) {
       const player = (url.searchParams.get('player') || '').trim().slice(0, 40);
       if (!player) { res.writeHead(400); return res.end(); }
-      const limit = p === '/api/token' ? 3_000_000 : p === '/api/sheet' ? 400_000 : p === '/api/share' ? 10_000 : 2000;
+      const limit = p === '/api/token' ? 3_000_000 : p === '/api/sheet' || p === '/api/offer' ? 400_000 : p === '/api/share' ? 10_000 : 2000;
       let body = '';
       req.on('data', (chunk) => { body += chunk; if (body.length > limit) { res.writeHead(413); res.end(); req.destroy(); } });
       req.on('end', () => {
@@ -135,6 +136,12 @@ class PlayerServer {
         if (p === '/api/sheet') {
           if (!data || typeof data.model !== 'object') { res.writeHead(400); return res.end(); }
           this.onAction({ type: 'sheet', player, model: data.model });
+        } else if (p === '/api/offer') {
+          const last = this.lastPing.get('offer:' + player.toLowerCase()) || 0;
+          if (Date.now() - last < 5000) { res.writeHead(429); return res.end(); }
+          if (!data || typeof data.model !== 'object' || !data.model) { res.writeHead(400); return res.end(); }
+          this.lastPing.set('offer:' + player.toLowerCase(), Date.now());
+          this.onAction({ type: 'offer', player, name: String(data.name || '').slice(0, 60), model: data.model });
         } else if (p === '/api/share') {
           const last = this.lastPing.get('share:' + player.toLowerCase()) || 0;
           if (Date.now() - last < 400 || !data || typeof data.share !== 'object') { res.writeHead(429); return res.end(); }

@@ -17,15 +17,17 @@
   <nav id="rail">
     <div class="brand" title="Dungeons Desk"><img src="../build/icon-128.png" alt="Dungeons Desk"></div>
     <button id="campaign-btn" class="campaign-btn"><span>🗺</span><b id="campaign-name">Campaign</b></button>
-    <button data-view="notes" class="active" title="Notes & Campaign Wiki"><span>📜</span>Notes</button>
+    <button data-view="notes" data-m="2" class="active" title="Notes & Campaign Wiki"><span>📜</span>Notes</button>
     <button data-view="generators" title="NPC & Monster Generator"><span>🎲</span>Generate</button>
-    <button data-view="initiative" title="Initiative Tracker & Encounter Builder"><span>⏳</span>Initiative</button>
-    <button data-view="maps" title="Battle Maps with Fog of War"><span>🧭</span>Map</button>
+    <button data-view="initiative" data-m="3" title="Initiative Tracker & Encounter Builder"><span>⏳</span>Initiative</button>
+    <button data-view="maps" data-m="4" title="Battle Maps with Fog of War"><span>🧭</span>Map</button>
     <button data-view="tokens" title="Token Maker"><span>🪙</span>Tokens</button>
     <button data-view="handouts" title="Player Handouts"><span>✉</span>Handouts</button>
     <button data-view="loot" title="Loot Tables"><span>💰</span>Loot</button>
     <button data-view="timeline" title="Timeline & Calendar"><span>📅</span>Timeline</button>
     <button data-view="rules" title="Rules Reference (SRD)"><span>📖</span>Rules</button>
+    <button data-view="session" data-m="1" title="Session: the fight, dice, party and pinned notes on one screen"><span>🎬</span>Session</button>
+    <button class="more-btn" title="All tools"><span>⋯</span>More</button>
     <div class="spacer"></div>
     <button data-view="settings" title="Settings & Party"><span>⚙</span>Settings</button>
   </nav>
@@ -39,6 +41,7 @@
     <section id="view-maps" class="view"></section>
     <section id="view-timeline" class="view"></section>
     <section id="view-rules" class="view"></section>
+    <section id="view-session" class="view"></section>
     <section id="view-settings" class="view"></section>
   </main>
 </div>
@@ -75,6 +78,7 @@
 <script src="js/importer.js"></script>
 <script src="js/dice.js"></script>
 <script src="js/sheets.js"></script>
+<script src="js/session.js"></script>
 <script src="js/settings.js"></script>
 <script src="js/campaigns.js"></script>
 <script src="js/app.js"></script>

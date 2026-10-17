@@ -33,7 +33,7 @@ window.Initiative = (() => {
     Store.get().initiative = JSON.parse(prev);
     changed(); toast('Undone');
   }
-  const changed = () => { if (window.Sheets) Sheets.syncFromCombat(); Store.save(); publishToPlayers(); draw(); if (window.Maps) Maps.rerender(); };
+  const changed = () => { if (window.Sheets) Sheets.syncFromCombat(); Store.save(); publishToPlayers(); draw(); if (window.Maps) Maps.rerender(); if (window.Session) Session.refresh(); };
 
   function sortList() {
     const s = ini(), cur = s.combatants[s.turn];
@@ -518,5 +518,5 @@ ${srd.length ? '\n## Stat Blocks\n\n' + srd.map(i => Statblock.fence(i.sb)).join
     });
   }
 
-  return { mount, addFromStatblock, add, addToEncounter, loadEncounterNote, playerInit, playerDeathSave, playerConcentration, playerHp, onShow: () => { if (tab === 'tracker') drawSide(); else drawBuilder(); }, condLabel, conds };
+  return { mount, start, step, applyHp, addFromStatblock, add, addToEncounter, loadEncounterNote, playerInit, playerDeathSave, playerConcentration, playerHp, onShow: () => { if (tab === 'tracker') drawSide(); else drawBuilder(); }, condLabel, conds };
 })();

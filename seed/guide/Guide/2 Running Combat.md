@@ -51,3 +51,11 @@ actions:
   - name: Wobble
     desc: "*Melee Attack Roll:* +2, reach 5 ft. *Hit:* 3 (1d4 + 1) Bludgeoning damage."
 ```
+
+## The Session screen 🎬
+**🎬 Session** puts everything you need while playing on one screen. It's the first tab in the phone app.
+- **The fight:** the turn order with **Next turn ▶**. Tap anyone to deal damage (`7`), heal (`+7`) or set HP (`=7`). The current creature's stat block is underneath, with clickable dice.
+- **Quick dice:** d20, advantage, disadvantage and the usual dice.
+- **The party:** AC, HP and passive Perception. Tap someone to open their sheet.
+- **📌 Pinned notes:** pin tonight's session plan, an NPC or a location with **📌** in the note toolbar, then open it right here.
+

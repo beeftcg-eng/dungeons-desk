@@ -168,6 +168,7 @@ window.Notes = (() => {
         fmt('🖼', 'Insert image (or paste / drag an image into the editor)', () => els.imgFile.click()),
       ),
       h('div.seg-group', modeBtn('edit', 'Edit', 'Editor only'), modeBtn('split', 'Split', 'Editor + preview'), modeBtn('read', 'Read', 'Reading view')),
+      els.pinBtn = h('button.icon', { title: 'Pin to the Session screen', onclick: () => { if (current) { const on = Session.togglePin(current); els.pinBtn.classList.toggle('on', on); toast(on ? 'Pinned to Session' : 'Unpinned'); } } }, '📌'),
       els.shareBtn = h('button.small.share-btn', { title: 'Share this note with players (Wiki tab on their phones)', onclick: shareDialog }, '👥 Share'),
       h('button.icon', { title: 'Version history', onclick: showHistory }, '🕘'),
       h('button.icon', { title: 'Delete note', onclick: deleteCurrent }, '🗑'),
@@ -316,6 +317,7 @@ window.Notes = (() => {
     localStorage.setItem('notes.last', path);
     const n = notes.find(x => x.path === path);
     els.title.value = n ? n.name : path.replace(/\.md$/, '');
+    els.pinBtn.classList.toggle('on', Session.isPinned(path));
     els.editor.value = cache.get(path);
     dirty = false;
     showEditor(true);
@@ -439,6 +441,7 @@ window.Notes = (() => {
     try { await dm.notes.rename(from, to); } catch (e) { toast(e.message.replace(/^.*Error: /, ''), 'err'); return false; }
     const content = cache.get(from); cache.delete(from); cache.set(to, content);
     if (current === from) { current = to; localStorage.setItem('notes.last', to); }
+    if (window.Session && Session.isPinned(from)) { Session.togglePin(from); Session.togglePin(to); }
     await refresh();
     return true;
   }

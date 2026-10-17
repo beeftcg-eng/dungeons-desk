@@ -127,6 +127,8 @@ window.CharSheet = (() => {
         resUsed: Object.fromEntries(Object.entries(obj(s.resUsed)).slice(0, 40).map(([k, v]) => [str(k, 40), int(v, 0, 99, 0)])),
         feats: arr(s.feats, 150, f => ({ id: id(f.id), name: str(f.name, 80) || 'Feature', desc: str(f.desc, 6000), uses: int(f.uses, 0, 99, 0), used: int(f.used, 0, 99, 0) })),
         profs: str(s.profs, 1500), languages: str(s.languages, 500),
+        // A small picture of the character (portraitFrom() makes it): a JPEG data URL, nothing else.
+        portrait: typeof s.portrait === 'string' && s.portrait.length <= 120000 && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(s.portrait) ? s.portrait : '',
         bio: Object.fromEntries(BIO.map(([k]) => [k, str(bio[k], k === 'backstory' ? 10000 : 1500)])),
       },
     };
@@ -311,7 +313,7 @@ window.CharSheet = (() => {
   }
 
   // ---------- The interactive sheet ----------
-  // opts: { model, live, mode: 'player'|'dm'|'solo', onChange(model), onShare(share) → Promise, toast(text), extraTabs: [{id, label, el}] }
+  // opts: { model, live, mode: 'player'|'dm'|'solo', onChange(model), onShare(share) → Promise, onRoll(entry) (solo only), toast(text), extraTabs: [{id, label, el}] }
   // 'solo' is the standalone sheet with no DM: it rolls on the phone itself and has nobody to show cards to.
   function mount(root, opts) {
     let model = prepare(opts.model || {}), live = opts.live || null, name = (opts.model || {}).name || '';
@@ -327,7 +329,7 @@ window.CharSheet = (() => {
 
     const commit = () => { applyAuto(model); render(); opts.onChange && opts.onChange(model); };
     const share = (sh) => {
-      if (solo) { const s = cleanShare({ id: uid(), ...sh }), e = s && resolve(s); if (e && e.kind !== 'card' && e.kind !== 'hp') showRoll(e); return; }
+      if (solo) { const s = cleanShare({ id: uid(), ...sh }), e = s && resolve(s); if (e && e.kind !== 'card' && e.kind !== 'hp') { showRoll(e); if (opts.onRoll) opts.onRoll(e); } return; }
       const p = opts.onShare ? opts.onShare({ id: uid(), ...sh }) : null;
       if (p && p.then) p.then(ok => { if (ok === false) toast('Not sent: check the connection to the DM'); else if (sh.kind === 'card') toast(player ? 'Sent to the DM' : 'Added to the player feed'); }).catch(() => toast('Not sent: check the connection to the DM'));
     };
@@ -356,7 +358,8 @@ window.CharSheet = (() => {
       const sub = [cls, esc(model.sheet.species), esc(model.sheet.background)].filter(Boolean).join(' · ');
       const hpPct = D.maxHp ? clamp(D.hp / D.maxHp, 0, 1) : null;
       const conds = (live && live.conditions) || [];
-      $h.innerHTML = `<div class="cs-title"><div class="cs-namebox"><div class="cs-name">${esc(name || 'Adventurer')}</div><div class="cs-sub">${sub || 'Tap ✏ Edit to set up your character'}</div></div>
+      const pic = model.sheet.portrait ? `<img class="cs-portrait" src="${esc(model.sheet.portrait)}" alt="">` : edit ? '<span class="cs-portrait cs-noportrait">🖼</span>' : '';
+      $h.innerHTML = `<div class="cs-title">${pic ? `<button class="cs-portrait-btn" data-act="portrait" title="${edit ? 'Change the picture' : 'Show the picture'}">${pic}</button>` : ''}<div class="cs-namebox"><div class="cs-name">${esc(name || 'Adventurer')}</div><div class="cs-sub">${sub || 'Tap ✏ Edit to set up your character'}</div></div>
         <button class="cs-editbtn${edit ? ' on' : ''}" data-act="edit">${edit ? '✓ Done' : '✏ Edit'}</button></div>
         <div class="cs-tiles">
           <button class="cs-tile" data-act="ac"><b>${D.ac}</b><span>AC</span></button>
@@ -749,6 +752,23 @@ window.CharSheet = (() => {
       });
     }
 
+    // The character's picture: tap it to see it big; in ✏ Edit, choose or remove one.
+    function portraitDialog() {
+      const s = model.sheet;
+      if (!edit) return s.portrait && dialog(`<img class="cs-portrait-big" src="${esc(s.portrait)}" alt="">`, () => {});
+      dialog(`<h3>Character picture</h3>${s.portrait ? `<img class="cs-portrait-big" src="${esc(s.portrait)}" alt="">` : '<p class="cs-hint">Choose a picture of your character. It\'s shrunk to fit, so any photo or drawing works.</p>'}
+        <input type="file" accept="image/*" hidden><div class="cs-btnrow"><button class="cs-btn primary" data-do="pick">🖼 Choose picture</button>${s.portrait ? '<button class="cs-btn danger" data-do="remove">Remove</button>' : ''}</div>`, (act, b, box) => {
+        if (act === 'remove') { s.portrait = ''; commit(); return closeDialog(); }
+        if (act !== 'pick') return;
+        const inp = box.querySelector('input[type=file]');
+        inp.onchange = async () => {
+          if (!inp.files[0]) return;
+          try { s.portrait = await portraitFrom(inp.files[0]); commit(); closeDialog(); } catch { toast('That picture couldn\'t be read'); }
+        };
+        inp.click();
+      });
+    }
+
     function hpDialog() {
       const s = model.sheet;
       if (D.inCombat && !player) return dialog(`<h3>Hit Points</h3><div class="cs-big">${D.hp ?? '—'}${D.maxHp != null ? ` <small>/ ${D.maxHp}</small>` : ''}</div><p class="cs-hint">During combat, change HP in the initiative tracker.</p>`, () => {});
@@ -877,6 +897,7 @@ window.CharSheet = (() => {
       if (!b || !root.contains(b)) return;
       const act = b.dataset.act, s = model.sheet;
       if (act === 'edit') { edit = !edit; return render(); }
+      if (act === 'portrait') return portraitDialog();
       if (act === 'roll') return rollDialog(b.dataset.label, num(b.dataset.bonus), b.dataset.nomod === '1', b.dataset.tag);
       if (act === 'damage') return share({ kind: 'damage', label: b.dataset.label, expr: b.dataset.expr });
       if (act === 'attack') return attackDialog(D.attacks[Number(b.dataset.i)]);
@@ -993,7 +1014,7 @@ window.CharSheet = (() => {
       .dot { font-family: sans-serif; }
       .muted { color: #666; font-size: 8.5pt; }
     </style></head><body>
-    <header><h1>${esc(name)}</h1><div class="sub">Level ${D.lvl} ${esc(cls || m.cls)}<br>${esc([s.species + (s.subspecies ? ` (${s.subspecies})` : ''), s.background, s.alignment].filter(Boolean).join(' · '))}</div></header>
+    <header><h1>${s.portrait ? `<img src="${esc(s.portrait)}" style="width:52pt;height:52pt;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:8pt;border:1.5pt solid #58180d">` : ''}${esc(name)}</h1><div class="sub">Level ${D.lvl} ${esc(cls || m.cls)}<br>${esc([s.species + (s.subspecies ? ` (${s.subspecies})` : ''), s.background, s.alignment].filter(Boolean).join(' · '))}</div></header>
     <div class="abil">${AB.map(a => `<div><small>${AB_NAME[a]}</small><b>${sgn(D.md[a])}</b>${D.score[a]}</div>`).join('')}</div>
     <div class="stats"><div><small>Armor Class</small><b>${D.ac}</b></div><div><small>Hit Points</small><b>${D.maxHp ?? '—'}</b></div><div><small>Initiative</small><b>${sgn(D.init)}</b></div>
       <div><small>Speed</small><b>${D.speed} ft</b></div><div><small>Proficiency</small><b>${sgn(D.pb)}</b></div><div><small>Passive Perc.</small><b>${D.passive}</b></div></div>
@@ -1042,7 +1063,46 @@ window.CharSheet = (() => {
     if (!data || data.format !== 'dungeons-desk-character' || !data.model) throw new Error('That isn\'t a Dungeons Desk character file.');
     return { name: String(data.name || '').slice(0, 60).trim(), model: applyAuto(clean(data.model)) };
   }
+  // A picture file → a square 320 px JPEG data URL, small enough to travel with the sheet (clean() allows 120 kB).
+  function portraitFrom(file) {
+    return new Promise((res, rej) => {
+      const url = URL.createObjectURL(file), img = new Image();
+      img.onload = () => {
+        const n = 320, c = document.createElement('canvas'), side = Math.min(img.width, img.height);
+        c.width = c.height = n;
+        // Faces are usually in the top part of a tall picture.
+        c.getContext('2d').drawImage(img, (img.width - side) / 2, img.height > img.width ? (img.height - side) * 0.2 : 0, side, side, 0, 0, n, n);
+        URL.revokeObjectURL(url);
+        let q = 0.85, out = c.toDataURL('image/jpeg', q);
+        while (out.length > 110000 && q > 0.4) { q -= 0.15; out = c.toDataURL('image/jpeg', q); }
+        res(out);
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('bad image')); };
+      img.src = url;
+    });
+  }
+
+  // Share links: the whole character file, deflated, in the link's #c= part, so a tap opens it in the sheet app.
+  // Nothing is uploaded anywhere; the part after # never leaves the phone that opens it.
+  const SHEET_URL = 'https://beeftcg-eng.github.io/dungeons-desk/sheet/';
+  const pipe = async (bytes, stream) => new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(stream)).arrayBuffer());
+  async function toLink(m, base = SHEET_URL) {
+    const bytes = await pipe(new TextEncoder().encode(JSON.stringify(toFile(m))), new CompressionStream('deflate-raw'));
+    let bin = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return base.replace(/#.*$/, '') + '#c=' + btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+  async function fromLink(url) {
+    const m = /[#&]c=([A-Za-z0-9_-]+)/.exec(String(url || ''));
+    if (!m) return null;
+    let bin;
+    try { bin = atob(m[1].replace(/-/g, '+').replace(/_/g, '/')); } catch { throw new Error('That link is damaged. Ask for it again.'); }
+    const bytes = Uint8Array.from(bin, ch => ch.charCodeAt(0));
+    let text;
+    try { text = new TextDecoder().decode(await pipe(bytes, new DecompressionStream('deflate-raw'))); } catch { throw new Error('That link is damaged. Ask for it again.'); }
+    return fromFile(text);
+  }
   const fileName = (name) => `${String(name || 'Character').replace(/[\\/:*?"<>|]/g, '').trim() || 'Character'}.ddchar.json`;
 
-  return { mount, setHomebrew, printHtml, derive, clean, prepare, applyAuto, cleanShare, resolve, rollDice, feedHtml, fmt, toFile, fromFile, fileName };
+  return { mount, setHomebrew, printHtml, derive, clean, prepare, applyAuto, cleanShare, resolve, rollDice, feedHtml, fmt, toFile, fromFile, fileName, toLink, fromLink, SHEET_URL };
 })();

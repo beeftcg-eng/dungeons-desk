@@ -31,6 +31,31 @@ window.Sheets = (() => {
       apply(p, a.model);
       if (open && open.p === p) open.api.set(modelOf(p), liveOf(p));
     } else if (a.type === 'share') handle(a.player, a.share, false);
+    else if (a.type === 'offer') offer(a);
+  }
+
+  // A player sent a character file from their phone (POST /api/offer). Nothing changes until the DM accepts it.
+  // It stays out of what phones get (local), since it carries the whole sheet.
+  function offer(a) {
+    let model;
+    try { model = CharSheet.applyAuto(CharSheet.clean(a.model)); } catch { return; }
+    const name = String(a.player).slice(0, 40), p = member(name);
+    const entry = { id: U.uid(), t: Date.now(), kind: 'card', local: true, player: name, title: `${name} sent a character sheet`,
+      sub: [a.name && a.name !== name ? `“${a.name}”` : '', model.cls ? `Level ${model.level} ${model.cls}` : '', p ? 'replaces their current sheet' : 'not in the party yet'].filter(Boolean).join(' · '),
+      body: '', offer: model };
+    feed.unshift(entry);
+    feed = feed.slice(0, 80);
+    pop(entry);
+    if (!els.panel.classList.contains('hidden')) drawPanel(); else { unread++; drawBadge(); }
+  }
+  function acceptOffer(e) {
+    let p = member(e.player);
+    if (!p) { p = { name: e.player, player: '', token: null }; party().push(p); }
+    apply(p, e.offer);
+    if (open && open.p === p) open.api.set(modelOf(p), liveOf(p));
+    e.done = 'Added'; delete e.offer;
+    redrawEntry(e);
+    toast(`${p.name}'s sheet is in the party`);
   }
 
   // Roll (or pass on) one share and add it to the feed.
@@ -76,7 +101,7 @@ window.Sheets = (() => {
   }
 
   // What phones get: recent results, each phone filters to its own (server.js viewFor).
-  const playerFeed = () => feed.filter(f => !f.byDm).slice(0, 40);
+  const playerFeed = () => feed.filter(f => !f.byDm && !f.local).slice(0, 40);
 
   const who = (e) => e.byDm ? `${e.player} · rolled by you` : e.player;
   // Reported damage or healing gets an Apply button; applying it goes through the initiative tracker.
@@ -87,6 +112,10 @@ window.Sheets = (() => {
       if (!Initiative.playerHp(e.player, e.amount, e.heal)) return toast(`${e.player} isn't in the turn order with HP set`, 'err');
       e.applied = true; publishToPlayers(); redrawEntry(e);
     } }, e.heal ? `Apply: +${e.amount} HP` : `Apply: −${e.amount} HP`));
+    if (e.offer) box.append(h('div.row',
+      h('button.small.primary', { onclick: (ev) => { ev.stopPropagation(); acceptOffer(e); } }, member(e.player) ? '✓ Use this sheet' : '➕ Add to party'),
+      h('button.small', { onclick: (ev) => { ev.stopPropagation(); e.done = 'Declined'; delete e.offer; redrawEntry(e); } }, 'Decline')));
+    if (e.done) box.append(h('div.dim.small', e.done));
     return box;
   }
   function redrawEntry(e) {
@@ -99,8 +128,8 @@ window.Sheets = (() => {
     card.append(h('button.feed-x', { title: 'Dismiss', onclick: (ev) => { ev.stopPropagation(); card.remove(); } }, '✕'));
     els.stack.prepend(card);
     [...els.stack.children].slice(5).forEach(x => x.remove());
-    // Damage reports wait until they're applied or dismissed.
-    if (e.kind !== 'hp') card.t = setTimeout(() => { card.classList.add('out'); setTimeout(() => card.remove(), 400); }, e.kind === 'card' ? 30000 : 15000);
+    // Damage reports and character offers wait until they're dealt with or dismissed.
+    if (e.kind !== 'hp' && !e.offer) card.t = setTimeout(() => { card.classList.add('out'); setTimeout(() => card.remove(), 400); }, e.kind === 'card' ? 30000 : 15000);
   }
 
   function drawBadge() { els.badge.textContent = unread; els.badge.hidden = !unread; }
@@ -123,7 +152,8 @@ window.Sheets = (() => {
     const m = U.modal(`📜 ${p.name}`, [h('div.row', h('p.dim.small.grow', `Changes are saved and show up on ${p.player || p.name}'s phone. Rolls you make here stay on your screen.`),
       h('button.small', { onclick: () => print('print') }, '🖨 Print'), dm.isWeb ? null : h('button.small', { onclick: () => print('pdf') }, '📄 Save as PDF'),
       h('button.small', { title: 'Replace this sheet with a character file (.ddchar.json)', onclick: () => importInto(p) }, '⇩ Import'),
-      h('button.small', { title: 'Save this sheet as a character file the player can open in the phone character sheet', onclick: () => exportSheet(p) }, '⇧ Export')), box],
+      h('button.small', { title: 'Save this sheet as a character file the player can open in the phone character sheet', onclick: () => exportSheet(p) }, '⇧ Export'),
+      h('button.small', { title: 'Copy a link that opens this character in the phone character sheet app (handy for pre-made characters)', onclick: () => copyLink(p) }, '🔗 Link')), box],
       { onClose: () => { if (open) open.api.destroy(); open = null; } });
     box.closest('.modal').classList.add('sheet-modal');
     const api = CharSheet.mount(box, {
@@ -142,6 +172,9 @@ window.Sheets = (() => {
   }
   function exportSheet(p) {
     U.download(new Blob([JSON.stringify(CharSheet.toFile(modelOf(p)))], { type: 'application/json' }), CharSheet.fileName(p.name));
+  }
+  async function copyLink(p) {
+    try { U.copy(await CharSheet.toLink(modelOf(p))); } catch { toast('Couldn\'t make a link. Use ⇧ Export instead.', 'err'); }
   }
   async function importInto(p) {
     const c = await readCharFile();

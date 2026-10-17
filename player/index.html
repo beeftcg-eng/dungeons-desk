@@ -416,8 +416,20 @@
     const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(f), download: CharSheet.fileName(data.card.name) });
     document.body.append(a); a.click(); a.remove();
   }
+  const pickCharFile = () => new Promise((res) => {
+    const inp = Object.assign(document.createElement('input'), { type: 'file', accept: '.json,application/json' });
+    inp.onchange = async () => { if (!inp.files[0]) return res(null); try { res(CharSheet.fromFile(await inp.files[0].text())); } catch (e) { toast(e.message); res(null); } };
+    inp.click();
+  });
+  // Not in the party yet: send the file to the DM, who adds it from their 📣 feed.
+  async function offerSheet() {
+    const c = await pickCharFile();
+    if (!c) return;
+    const r = await fetch('/api/offer' + qs(), { method: 'POST', body: JSON.stringify({ name: c.name, model: c.model }) }).catch(() => null);
+    toast(r && r.ok ? 'Sent! The DM adds it from their screen.' : r && r.status === 429 ? 'Wait a few seconds and try again' : 'Not sent: check the connection to the DM');
+  }
   function importSheet() {
-    if (!sheet || !data.card) return toast('Ask the DM to add your character to the party first');
+    if (!sheet || !data.card) return offerSheet();
     const inp = Object.assign(document.createElement('input'), { type: 'file', accept: '.json,application/json' });
     inp.onchange = async () => {
       if (!inp.files[0]) return;
@@ -435,7 +447,8 @@
     const hbChanged = CharSheet.setHomebrew(data.homebrew || {});
     if (!c) {
       if (sheet) { sheet.destroy(); sheet = null; sheetFor = null; }
-      el.innerHTML = `<div class="card"><div class="pcname">${esc(me || '')}</div><p style="color:var(--dim)">Ask the DM to add your character to the party in their Settings. Then your character sheet appears here.</p></div>`;
+      el.innerHTML = `<div class="card"><div class="pcname">${esc(me || '')}</div><p style="color:var(--dim)">Ask the DM to add your character to the party in their Settings. Then your character sheet appears here.</p><p style="color:var(--dim)">Made your character in the Dungeons Desk character sheet app? Send it, and the DM adds it with one tap.</p><button class="btn primary" id="offerbtn">📜 Send my character file to the DM</button></div>`;
+      el.querySelector('#offerbtn').addEventListener('click', offerSheet);
       el.append(box);
     } else if (!sheet || sheetFor !== c.name) {
       if (sheet) sheet.destroy();
@@ -584,7 +597,7 @@
     { tab: 'handouts', icon: '✉', title: () => 'Handouts', body: 'Letters, clues, wanted posters and secrets from the DM pop up here, and some are just for you. A red badge means something new.' },
     { tab: 'wiki', icon: '📚', title: () => 'Wiki', body: 'People, places and lore the DM has shared with the party. Tap a highlighted name to jump to that page.' },
     { tab: 'map', icon: '🗺', title: () => 'Map', body: 'When the DM shows a map:<ul><li><b>✋ Move</b>: drag your own token. Fog clears as you explore.</li><li><b>📏 Measure</b>: drag to measure (1 square = 5 ft).</li><li><b>📍 Ping</b>: tap to point something out.</li></ul>Pinch to zoom, drag to look around.' },
-    { tab: 'char', icon: '📜', title: () => 'Your character sheet', body: 'Your whole character: stats, attacks, spells, gear and features. Tap <b>✏ Edit</b> to set it up; picking your class and level fills in the rest.<ul><li><b>Tap a save, skill, attack or spell</b> to roll it. The DM sees the result.</li><li><b>📤 Show the DM</b> sends them a spell, feature or item.</li></ul>Your token picture and private notes are under <b>📝 Notes</b>, along with <b>⇩ Import my sheet</b> for a character you made in the Dungeons Desk character sheet app.' },
+    { tab: 'char', icon: '📜', title: () => 'Your character sheet', body: 'Your whole character: stats, attacks, spells, gear and features. Tap <b>✏ Edit</b> to set it up; picking your class and level fills in the rest.<ul><li><b>Tap a save, skill, attack or spell</b> to roll it. The DM sees the result.</li><li><b>📤 Show the DM</b> sends them a spell, feature or item.</li></ul>Your token picture and private notes are under <b>📝 Notes</b>, along with <b>⇩ Import my sheet</b> for a character you made in the Dungeons Desk character sheet app. Not in the party yet? <b>Send my character file to the DM</b> and they add you with one tap.' },
     { tab: 'turns', icon: '🎲', title: () => 'You\'re all set!', body: 'Tip: add this page to your home screen (browser menu → "Add to Home screen") so it\'s one tap away next session. You can replay this tour from the 👤 Me tab.' },
   ];
   let tourStep = -1;

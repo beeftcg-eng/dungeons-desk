@@ -113,6 +113,14 @@ test('ping and share are rate-limited per player', async () => {
   assert.strictEqual((await req('POST', '/api/share', { player: 'Sharer', body: { share: { kind: 'roll' } } })).status, 429);
 });
 
+test('offer: a character file goes to the DM app as an offer, once per 5 seconds per player', async () => {
+  actions.length = 0;
+  assert.strictEqual((await req('POST', '/api/offer', { player: 'Newbie', body: { name: 'Zed' } })).status, 400, 'no model');
+  assert.strictEqual((await req('POST', '/api/offer', { player: 'Newbie', body: { name: 'Zed', model: { cls: 'Wizard' } } })).status, 204);
+  assert.strictEqual((await req('POST', '/api/offer', { player: 'newbie', body: { name: 'Zed', model: { cls: 'Wizard' } } })).status, 429);
+  assert.deepStrictEqual(actions, [{ type: 'offer', player: 'Newbie', name: 'Zed', model: { cls: 'Wizard' } }]);
+});
+
 test('bodies over the size limit are refused', async () => {
   const res = await req('POST', '/api/move', { player: 'Thorin', body: JSON.stringify({ x: 1, y: 1, pad: 'x'.repeat(5000) }) });
   assert.ok(res.status === 413 || res.status === 'reset', `got ${res.status}`);

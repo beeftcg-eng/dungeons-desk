@@ -69,11 +69,27 @@ window.Campaigns = (() => {
   }
   const importFile = () => switchTo(() => dm.campaigns.importFile().then(r => { if (!r) throw new Error('No file chosen'); }));
 
+  // Phone app only: browsers can clear a site's storage, so remind the DM to export a campaign that changed
+  // since its last export, once that's a week old. "Later" waits three days.
+  async function remindBackup() {
+    if (!dm.campaigns.backupInfo) return;
+    const DAY = 86400000, b = await dm.campaigns.backupInfo(), key = 'dd.backupSnooze';
+    if (!b.changed || (b.exported && b.changed <= b.exported)) return;
+    if (Date.now() - (b.exported || b.created || b.changed) < 7 * DAY) return;
+    if (Number(localStorage.getItem(key) || 0) > Date.now()) return;
+    const m = U.modal('💾 Keep a copy of your campaign', [
+      h('p', b.exported ? `This campaign was last exported ${Math.round((Date.now() - b.exported) / DAY)} days ago, and it has changed since.` : 'This campaign has never been exported.'),
+      h('p.dim', 'Phones sometimes clear app data, for example after weeks without opening it or when storage runs low. A campaign file keeps everything safe and opens in the desktop app too.'),
+      h('div.row.end', h('button', { onclick: () => { localStorage.setItem(key, Date.now() + 3 * DAY); m.close(); } }, 'Later'),
+        h('button.primary', { onclick: () => { m.close(); exportFile(); } }, '⇧ Export now')),
+    ]);
+  }
+
   async function refreshRail() {
     const info = await dm.campaigns.list();
     const el = U.$('#campaign-name');
     if (el) { el.textContent = info.currentName; el.parentElement.title = `Campaign: ${info.currentName}\nClick to switch or start a new one`; }
   }
 
-  return { open, newCampaign, refreshRail, exportFile, importFile };
+  return { open, newCampaign, refreshRail, exportFile, importFile, remindBackup };
 })();

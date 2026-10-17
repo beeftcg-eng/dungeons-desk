@@ -136,6 +136,8 @@
     const st = await get('state', id);
     const data = { format: 'dungeons-desk-campaign', version: 1, name: c.name, exported: new Date().toISOString(), folders: c.folders || [], notes, state: st ? st.data : {}, media, attachments };
     download(new Blob([JSON.stringify(data)], { type: 'application/json' }), `${fileName(c.name) || 'Campaign'}.ddcampaign.json`);
+    c.exported = Date.now();
+    await put('campaigns', c);
     return true;
   }
   async function importCampaign(data) {
@@ -214,6 +216,9 @@ started: ${new Date().toISOString().slice(0, 10)}
 - [[Session 1]]
 `;
 
+  // When this campaign last changed, for the backup reminder (kept out of IndexedDB so saving stays one write).
+  const changed = () => { try { localStorage.setItem('dd.changed.' + cid, Date.now()); } catch { /* storage full or blocked */ } };
+
   const r = (fn) => async (...a) => { await ready; return fn(...a); };
   const noop = () => {};
   window.dm = {
@@ -251,6 +256,7 @@ started: ${new Date().toISOString().slice(0, 10)}
       rename: r(async (id, name) => { const c = await get('campaigns', id); if (c) { c.name = String(name).trim(); await put('campaigns', c); } return true; }),
       reveal: noop,
       exportFile: r((id) => exportCampaign(id || cid)),
+      backupInfo: r(async () => { const c = await campaign(); return { created: c.created, exported: c.exported || null, changed: Number(localStorage.getItem('dd.changed.' + cid)) || null }; }),
       importFile: r(async () => {
         const f = await pickFile('.json,application/json');
         if (!f) return null;
@@ -317,7 +323,7 @@ started: ${new Date().toISOString().slice(0, 10)}
         return { path: n.path, name: n.path.slice(i + 1).replace(/\.md$/i, ''), folder: i < 0 ? '' : n.path.slice(0, i), mtime: n.mtime, content: n.content };
       })),
       read: r(async (rel) => { const n = await get('notes', [cid, safe(rel)]); if (!n) throw new Error('ENOENT: no such note ' + rel); return n.content; }),
-      write: r(async (rel, content) => { rel = safe(rel); await snapshot(rel); await put('notes', { cid, path: rel, content: String(content), mtime: Date.now() }); return true; }),
+      write: r(async (rel, content) => { rel = safe(rel); await snapshot(rel); await put('notes', { cid, path: rel, content: String(content), mtime: Date.now() }); changed(); return true; }),
       exists: r(async (rel) => !!(await get('notes', [cid, safe(rel)]))),
       delete: r(async (rel) => { rel = safe(rel); await snapshot(rel, { force: true }); await del('notes', [cid, rel]); return true; }),
       rename: r(async (from, to) => {
@@ -336,7 +342,7 @@ started: ${new Date().toISOString().slice(0, 10)}
     },
     state: {
       load: r(async () => { const s = await get('state', cid); return s ? s.data : {}; }),
-      save: r(async (state) => { await put('state', { cid, data: JSON.parse(JSON.stringify(state)) }); return true; }),
+      save: r(async (state) => { await put('state', { cid, data: JSON.parse(JSON.stringify(state)) }); changed(); return true; }),
     },
     media: {
       save: r(async (dataUrl, hint = 'image') => {

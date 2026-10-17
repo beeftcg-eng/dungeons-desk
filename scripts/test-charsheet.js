@@ -140,5 +140,19 @@ test('Character files round-trip and reject other JSON', () => {
   assert.strictEqual(CS.fileName('Thorin: the "Bold"'), 'Thorin the Bold.ddchar.json');
 });
 
-if (require.main === module) console.log(process.exitCode ? 'Some checks failed.' : `All ${passed} checks passed.`);
+// Share links use CompressionStream, which is async; checked after the rest.
+const linkCheck = (async () => {
+  const m = CS.applyAuto(CS.clean(thorin));
+  const url = await CS.toLink({ ...m, name: 'Thorin' }, 'https://example.test/sheet/#old');
+  assert.ok(url.startsWith('https://example.test/sheet/#c='), url.slice(0, 40));
+  assert.ok(url.length < 4000, `link is ${url.length} characters`);
+  const back = await CS.fromLink(url);
+  assert.strictEqual(back.name, 'Thorin');
+  assert.deepStrictEqual(back.model, m);
+  assert.strictEqual(await CS.fromLink('https://example.test/sheet/'), null);
+  await assert.rejects(CS.fromLink('#c=AAAA'));
+  passed++;
+})().catch((e) => { console.error(`✗ Share links round-trip\n  ${e.message}`); process.exitCode = 1; });
+
+if (require.main === module) linkCheck.then(() => console.log(process.exitCode ? 'Some checks failed.' : `All ${passed} checks passed.`));
 module.exports = { test, pc, d, CS, assert };

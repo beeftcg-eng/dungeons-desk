@@ -3,7 +3,8 @@
 //   PAGE=dm|sheet|''   which page (default dm)      VIEWS=notes,initiative   DM views to capture (default: all)
 //   W=390 H=844        window size                 STEPS="js|||js"           run each on the page, capture step1.png…
 //   PRE="js"           run once after load          EXTRA="js"               log the result of an expression
-const { app, BrowserWindow, session } = require('electron');
+//   THEME=light|dark   the phone's color scheme (prefers-color-scheme)
+const { app, BrowserWindow, session, nativeTheme } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const http = require('http');
@@ -23,6 +24,7 @@ const server = http.createServer((req, res) => {
   fs.createReadStream(full).pipe(res);
 });
 
+if (process.env.THEME) nativeTheme.themeSource = process.env.THEME;
 app.whenReady().then(() => server.listen(0, async () => {
   const port = server.address().port;
   const ses = session.fromPartition('smoke-' + Date.now()); // not persisted: every run starts empty

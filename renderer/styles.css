@@ -541,10 +541,37 @@ td .src { margin-left: 8px; }
 .sheet-btn { padding: 4px 9px; }
 :root[data-mode=light] .cs-chip.cs-cond { background: #ead9f7; color: #4a2370; }
 
+/* ---------- Session view (session.js) ---------- */
+.session-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; align-items: start; }
+.session-fight { grid-row: span 3; }
+.session-turns { display: flex; flex-direction: column; gap: 4px; margin: 8px 0; }
+.session-turn { display: flex; align-items: center; gap: 10px; text-align: left; padding: 8px 10px; border-left: 4px solid var(--red, #d9443a); }
+.session-turn.k-pc { border-left-color: #5fb3e8; } .session-turn.k-ally { border-left-color: #4caf50; } .session-turn.k-lair { border-left-color: var(--dim); }
+.session-turn.current { border-color: var(--accent); background: var(--panel2); box-shadow: 0 0 0 1px var(--accent); }
+.session-turn.defeated { opacity: .45; text-decoration: line-through; }
+.st-init { width: 28px; font-weight: 700; color: var(--accent); text-align: center; }
+.st-name { flex: 1; min-width: 0; } .st-name small { color: var(--dim); }
+.st-ac, .st-hp { font-size: 13px; color: var(--dim); white-space: nowrap; }
+.st-hp { color: var(--text); font-weight: 600; } .st-hp.bloodied { color: #e0a030; } .st-hp.down { color: #d9443a; }
+.session-dice { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.session-dice button { padding: 10px 0; font-weight: 600; }
+.session-party { display: flex; flex-direction: column; gap: 6px; }
+.session-pc { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; text-align: left; padding: 8px 10px; }
+.chips { display: inline-flex; flex-wrap: wrap; gap: 4px; margin-left: auto; }
+.chips i { font-style: normal; font-size: 12px; background: var(--bg2); border: 1px solid var(--line); border-radius: 10px; padding: 1px 8px; }
+.session-pins details { border-top: 1px solid var(--line); padding: 6px 0; }
+.session-pins summary { display: flex; align-items: center; gap: 6px; cursor: pointer; font-weight: 600; }
+.session-pins .md { padding: 8px 2px 0; }
+.note-toolbar .icon.on { color: var(--accent); background: var(--panel2); border-color: var(--line); }
+
 /* ---------- Phone layout (the phone app, web/; the desktop window never gets this narrow) ----------
    The rail becomes a scrolling tab bar at the bottom, two-column layouts stack, and list/detail views
    (notes, rules, handouts) show one side at a time: .m-detail on the layout while an item is open. */
-.m-back { display: none; }
+.m-back, #rail .more-btn { display: none; }
+.more-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.more-item { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 14px 4px; font-size: 13px; }
+.more-item span { font-size: 24px; }
+.more-item.on { border-color: var(--accent); color: var(--accent); }
 @media (max-width: 760px) {
   :root { --navh: 60px; }
   html, body { font-size: 15px; overscroll-behavior: none; }
@@ -556,8 +583,12 @@ td .src { margin-left: 8px; }
   #rail::-webkit-scrollbar { display: none; }
   #rail .brand, #rail .spacer { display: none; }
   #rail button { min-width: 62px; flex: none; padding: 4px 2px; justify-content: center; }
-  #rail .campaign-btn { display: none; } /* Settings → Switch campaign, to leave room for the tools */
-  #rail button { min-width: 56px; }
+  /* Four tools in the bar (data-m gives their order); the rest, and campaigns, are under More. */
+  #rail { overflow-x: hidden; justify-content: space-around; }
+  #rail .campaign-btn, #rail button[data-view]:not([data-m]) { display: none; }
+  #rail button { flex: 1; min-width: 0; max-width: 90px; }
+  #rail .more-btn { display: flex; order: 9; }
+  #rail [data-m="1"] { order: 1; } #rail [data-m="2"] { order: 2; } #rail [data-m="3"] { order: 3; } #rail [data-m="4"] { order: 4; }
   .ref-attr { display: none; } /* also under Settings → Credits */
   .page { padding: 12px 12px 90px; }
   .page.page-flush { padding: 0; }
@@ -579,6 +610,7 @@ td .src { margin-left: 8px; }
 
   /* Everything that was side by side stacks. */
   .gen-layout, .tl-layout, .init-layout, .enc-layout, .token-layout, .sb-builder, .imp-paste, .imp-o5, .ho-editor, .settings-grid, .hist-layout, .grid2, .spell-props { grid-template-columns: minmax(0, 1fr); }
+  .session-grid { grid-template-columns: minmax(0, 1fr); } .session-fight { grid-row: auto; }
   .hist-layout { height: auto; } .hist-list { max-height: 30vh; overflow: auto; }
   .npc-row { grid-template-columns: 90px minmax(0, 1fr) 30px; }
   .party-table { display: block; overflow-x: auto; }
