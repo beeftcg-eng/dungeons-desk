@@ -227,6 +227,8 @@ started: ${new Date().toISOString().slice(0, 10)}
   const changed = () => { try { localStorage.setItem('dd.changed.' + cid, Date.now()); } catch { /* storage full or blocked */ } };
 
   const r = (fn) => async (...a) => { await ready; return fn(...a); };
+  const LIBRARY = '~library';
+  const libPath = (rel) => { rel = safe(rel); if (!/^Homebrew\/.+\.md$/i.test(rel)) throw new Error('Not a library note: ' + rel); return rel; };
   const noop = () => {};
   window.dm = {
     isWeb: true,
@@ -316,6 +318,16 @@ started: ${new Date().toISOString().slice(0, 10)}
       delete: r(async (rel) => dropBlob('attach', safe(rel))),
     },
     // What cloud sync last synced for the open campaign (the desktop app keeps it in .dmtools/cloud.json).
+    // The homebrew library shared by every campaign on this phone (renderer/js/library.js): notes kept under a campaign
+    // id no campaign uses, and its sync state in that id's state record.
+    library: {
+      list: r(async () => (await all('notes', inCampaign(LIBRARY))).map(n => ({ path: n.path, mtime: n.mtime, content: n.content }))),
+      write: r(async (rel, content) => { rel = libPath(rel); const mtime = Date.now(); await put('notes', { cid: LIBRARY, path: rel, content: String(content), mtime }); return mtime; }),
+      delete: r(async (rel) => { await del('notes', [LIBRARY, libPath(rel)]); return true; }),
+      meta: r(async () => { const s = await get('state', LIBRARY); return s ? s.data : {}; }),
+      saveMeta: r(async (m) => { await put('state', { cid: LIBRARY, data: JSON.parse(JSON.stringify(m || {})) }); return true; }),
+      reveal: noop,
+    },
     cloud: {
       load: r(async () => (await campaign()).cloud || null),
       save: r(async (data) => { const c = await campaign(); if (data == null) delete c.cloud; else c.cloud = JSON.parse(JSON.stringify(data)); await put('campaigns', c); return true; }),

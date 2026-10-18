@@ -81,6 +81,7 @@ window.Settings = (() => {
           h('div.row', h('button', { title: 'Find images no note, handout, map or token uses any more', onclick: () => Campaigns.cleanImages() }, '🧹 Clean up images')),
           backupBox),
         CloudSync.card(),
+        Library.card(),
         installCard(),
         appearanceCard(),
         updatesCard(),

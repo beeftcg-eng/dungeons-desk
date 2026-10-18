@@ -16,6 +16,15 @@ On any SRD entry, **✏ Copy to homebrew** makes an editable copy for your world
 
 **Or give players all of it.** Tick **⚙ Settings → Party → ★ Players get all my homebrew spells and magic items**, and every homebrew spell and item in this campaign reaches every player's sheet without sharing each one. That includes ones you imported from a book PDF. Notes you've shared with particular players still go only to them. Homebrew monsters always stay with you.
 
+## One homebrew library for all your campaigns 📚
+Your homebrew isn't stuck in one campaign. Every homebrew note (anything in the **Homebrew** folder) also goes into your **homebrew library**, and the library is copied into every campaign you open.
+- **Make or import it once.** A monster you build in one campaign, or a magic item you import from a book, shows up in your other campaigns the next time you open them.
+- **Edit or delete it anywhere.** The change reaches the other campaigns. A deleted note goes from all of them; each campaign's note history still has a copy, and so does your computer's trash.
+- **On every device.** Signed in under **☁ Cloud sync**, the library is kept in your account too, so the phone app and your other computers get it. That works even for campaigns you don't sync.
+- **Sharing stays per campaign.** Who you share a note with (👥 Share, `share:`) stays with each campaign, since each has its own players.
+- **Keep one to a single campaign** (a secret villain, say) by adding `library: false` to its properties.
+- On a computer, the library is the folder **Documents/Dungeons Desk Library**. It's on the **⚙ Settings → 📚 Homebrew library** card, along with **↻ Sync now**. If a campaign already had its own, different version of a note with the same name, the card shows it so you can pick one.
+
 ## Importing
 In **📖 Rules → 📥 Import**:
 - **📋 Paste text**: on D&D Beyond (or in a PDF), select a stat block, spell or item, copy it and paste it here. The app works out what it is and shows a preview before saving. *D&D Beyond links can't be fetched directly, because D&D Beyond doesn't allow other apps to read its pages.*

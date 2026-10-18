@@ -332,6 +332,7 @@ window.Notes = (() => {
     await dm.notes.write(current, content);
     cache.set(current, content);
     dirty = false;
+    if (current.startsWith('Homebrew/') && window.Library) Library.soon(3000);   // edits reach the other campaigns
     renderInfo();
     if (shareOf(content) || wikiCache.wiki.some(w => w.id === current)) { wikiDirty = true; publishToPlayers(); }
   }
@@ -470,8 +471,10 @@ window.Notes = (() => {
   async function deleteCurrent() {
     if (!current) return;
     const n = notes.find(x => x.path === current);
-    if (!await U.confirm('Delete note', `Move “${n ? n.name : current}” to the trash?`)) return;
+    const shared = window.Library && current.startsWith('Homebrew/') && !/^library\s*:\s*(false|no|off)\s*$/im.test(cache.get(current) || '');
+    if (!await U.confirm('Delete note', `Move “${n ? n.name : current}” to the trash?${shared ? ' It\'s in your homebrew library, so it\'s removed from your other campaigns too.' : ''}`)) return;
     await dm.notes.delete(current);
+    if (shared) Library.soon(1000);
     cache.delete(current);
     current = null; dirty = false;
     showEditor(false);

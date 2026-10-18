@@ -17,6 +17,29 @@ const docsDir = () => {
 };
 const CAMPAIGNS_DIR = path.join(docsDir(), 'Dungeons Desk Campaigns');
 const BACKUPS_DIR = path.join(docsDir(), 'Dungeons Desk Backups');
+// The homebrew library: homebrew notes shared by every campaign on this computer (renderer/js/library.js keeps each
+// campaign's Homebrew/ folder in step with it). Only .md files under Homebrew/ live here, plus .library.json (sync state).
+const LIBRARY_DIR = path.join(docsDir(), 'Dungeons Desk Library');
+function libSafe(rel) {
+  rel = String(rel || '').replace(/\\/g, '/');
+  const full = path.resolve(LIBRARY_DIR, rel), root = path.resolve(LIBRARY_DIR, 'Homebrew') + path.sep;
+  if (!/\.md$/i.test(rel) || !full.startsWith(root)) throw new Error('Not a library note: ' + rel);
+  return full;
+}
+function libList() {
+  const out = [];
+  const walk = (dir) => {
+    let entries = [];
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) walk(full);
+      else if (/\.md$/i.test(e.name)) out.push({ path: path.relative(LIBRARY_DIR, full).split(path.sep).join('/'), mtime: fs.statSync(full).mtimeMs, content: fs.readFileSync(full, 'utf8') });
+    }
+  };
+  walk(path.join(LIBRARY_DIR, 'Homebrew'));
+  return out;
+}
 const REPO = { owner: 'beeftcg-eng', repo: 'dungeons-desk' };
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|svg|avif|bmp)$/i;
 let config = { vault: path.join(docsDir(), 'Dungeons Desk Vault'), port: 7777, campaigns: [] };
@@ -301,6 +324,21 @@ function registerIpc() {
   ipcMain.handle('campaigns:reveal', (_e, dir) => shell.openPath(dir || config.vault));
   ipcMain.handle('vault:reveal', () => shell.openPath(config.vault));
 
+  ipcMain.handle('library:list', () => libList());
+  ipcMain.handle('library:write', (_e, rel, content) => {
+    const full = libSafe(rel);
+    fs.mkdirSync(path.dirname(full), { recursive: true });
+    fs.writeFileSync(full, String(content));
+    return fs.statSync(full).mtimeMs;
+  });
+  ipcMain.handle('library:delete', async (_e, rel) => {
+    const full = libSafe(rel);
+    if (fs.existsSync(full)) await shell.trashItem(full).catch(() => fs.rmSync(full, { force: true }));
+    return true;
+  });
+  ipcMain.handle('library:meta', () => { try { return JSON.parse(fs.readFileSync(path.join(LIBRARY_DIR, '.library.json'), 'utf8')); } catch { return {}; } });
+  ipcMain.handle('library:saveMeta', (_e, m) => { fs.mkdirSync(LIBRARY_DIR, { recursive: true }); fs.writeFileSync(path.join(LIBRARY_DIR, '.library.json'), JSON.stringify(m || {}, null, 1)); return true; });
+  ipcMain.handle('library:reveal', () => { fs.mkdirSync(path.join(LIBRARY_DIR, 'Homebrew'), { recursive: true }); return shell.openPath(LIBRARY_DIR); });
   ipcMain.handle('notes:list', () => ({ notes: listNotes(), folders: listNotes.folders || [] }));
   ipcMain.handle('notes:readAll', () => listNotes().map(n => ({ ...n, content: fs.readFileSync(safe(n.path), 'utf8') })));
   ipcMain.handle('notes:read', (_e, rel) => fs.readFileSync(safe(rel), 'utf8'));

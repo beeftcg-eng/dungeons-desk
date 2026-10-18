@@ -68,6 +68,7 @@ ${blurb ? blurb.trim() + '\n\n' : '*Describe this creature and where it lurks.*\
   const folder = { monster: 'Homebrew/Monsters', spell: 'Homebrew/Spells', item: 'Homebrew/Items' };
   async function save(kind, obj, { open = true, source, blurb } = {}) {
     const content = kind === 'spell' ? spellNote(obj) : kind === 'item' ? itemNote(obj) : monsterNote(obj, source || obj.source || 'Homebrew', blurb);
+    if (window.Library) Library.soon(3000);   // into the homebrew library, for every campaign
     if (open) return Notes.create(obj.name, content, null, folder[kind]);
     const path = await Notes.uniquePath(folder[kind], obj.name);
     await dm.notes.write(path, content);

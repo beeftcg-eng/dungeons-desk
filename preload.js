@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld('dm', {
   backup: { now: call('backup:now'), info: call('backup:info'), reveal: call('backup:reveal') },
   attach: { save: call('attach:save'), list: call('attach:list'), read: call('attach:read'), write: call('attach:write'), delete: call('attach:delete') },
   cloud: { load: call('cloud:load'), save: call('cloud:save') },
+  library: { list: call('library:list'), write: call('library:write'), delete: call('library:delete'), meta: call('library:meta'), saveMeta: call('library:saveMeta'), reveal: call('library:reveal') },
   notes: {
     list: call('notes:list'), readAll: call('notes:readAll'), read: call('notes:read'), write: call('notes:write'),
     exists: call('notes:exists'), delete: call('notes:delete'), rename: call('notes:rename'), mkdir: call('notes:mkdir'),
