@@ -1,12 +1,12 @@
 // The standalone character sheet (dist-web/sheet/): shared/charsheet.js in 'solo' mode, with no DM involved.
 // Characters are kept in this browser's localStorage. A character file (CharSheet.toFile) takes one to a DM's
-// game: they add it in Settings → ⇩ Add from a character file, or the player imports it in the game's 👤 Me tab.
+// game: they add it in Settings → ⇩ Add from a file or PDF, or the player imports it in the game's 👤 Me tab.
 (() => {
   const KEY = 'dd.sheet.chars', CUR = 'dd.sheet.current';
   const $ = (s) => document.querySelector(s);
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-  let chars = [], sheet = null, saveTimer = null;
+  let chars = [], sheet = null, notesUi = null, saveTimer = null;
 
   function load() {
     try { chars = JSON.parse(localStorage.getItem(KEY) || '[]'); } catch { chars = []; }
@@ -75,7 +75,7 @@
   }
   function pickFile() {
     return new Promise((res) => {
-      const inp = Object.assign(document.createElement('input'), { type: 'file', accept: '.json,application/json' });
+      const inp = Object.assign(document.createElement('input'), { type: 'file', accept: CharSheet.FILE_TYPES });
       inp.onchange = () => res(inp.files[0] || null);
       inp.click();
     });
@@ -84,10 +84,10 @@
     const f = await pickFile();
     if (!f) return;
     let c;
-    try { c = CharSheet.fromFile(await f.text()); } catch (e) { return toast(e.message, true); }
+    try { c = await CharSheet.readFile(f); } catch (e) { return toast(e.message, true); }
     const ch = { id: uid(), name: c.name || 'Adventurer', model: c.model, created: Date.now(), updated: Date.now(), exported: Date.now() };
     chars.unshift(ch);
-    if (save()) { toast(`Imported ${ch.name}`); openChar(ch.id); }
+    if (save()) { toast(`Imported ${ch.name}${c.from === 'form' ? '. Check its gear and spells: a PDF doesn\'t hold everything' : ''}`); openChar(ch.id); }
   }
   function newChar() {
     const name = prompt('Character name', '');
@@ -96,11 +96,14 @@
     chars.unshift(ch);
     save();
     openChar(ch.id);
+    // A new character starts with the guide's welcome page, which also lets them fill it in by hand.
+    sheet.guide();
   }
 
   // ---------- The list of characters ----------
   let listDraws = 0;
   function showList() {
+    if (notesUi) { notesUi.destroy(); notesUi = null; }
     if (sheet) { sheet.destroy(); sheet = null; }
     document.querySelectorAll('.cs-rollpop').forEach(x => x.remove());
     localStorage.removeItem(CUR);
@@ -113,10 +116,10 @@
     main.innerHTML = `${stale.length && !snoozed ? `<div class="card backup"><h3>💾 Keep a copy</h3><p class="hint">${esc(stale.map(c => c.name).join(', '))} ${stale.length === 1 ? 'hasn\'t' : 'haven\'t'} been saved to a file for a while. Phones sometimes clear app data, so a file or link keeps your character safe.</p>
         <div class="row"><button class="btn primary" data-a="backup">⬇ Download ${stale.length === 1 ? 'it' : 'them'}</button><button class="btn" data-a="later">Later</button></div></div>` : ''}${chars.length ? '' : `<div class="empty"><div class="big">📜</div><p class="hint">A D&amp;D character sheet (2024 rules) that does the math for you: build a character, tap to roll, level up and track HP, spell slots and gear. Everything is saved on this phone.</p></div>`}
       <div class="chars">${chars.map(c => `<button class="char" data-id="${esc(c.id)}">${av(c)}<span><b>${esc(c.name)}</b><small>${esc(summary(c))}</small>${stats(c)}</span></button>`).join('')}</div>
-      <div class="row"><button class="btn primary" data-a="new">＋ New character</button><button class="btn" data-a="import">⇩ Import a character file</button></div>
+      <div class="row"><button class="btn primary" data-a="new">＋ New character</button><button class="btn" data-a="import">⇩ Import a file or PDF</button></div>
       <div style="margin-top:18px">${syncCard()}</div>
       <div class="card"><h3>🎲 Playing at a Dungeons Desk table?</h3>
-        <p class="hint">Open your character, go to its 💾 File tab and send the file to your DM. They add it from Settings → ⇩ Add from a character file. If the DM already has you in the party, open their game on your phone (scan their QR code) and use 👤 Me → ⇩ Import my sheet.</p></div>`;
+        <p class="hint">Open your character, go to its 💾 File tab and send the file to your DM. They add it from Settings → ⇩ Add from a file or PDF. A PDF printed from 💾 File → 🖨 Print works too. If the DM already has you in the party, open their game on your phone (scan their QR code) and use 👤 Me → ⇩ Import my sheet.</p></div>`;
     const drawn = ++listDraws;
     Install.card({ app: 'sheet', short: 'Character', what: 'your characters' }).then(el => { if (el && drawn === listDraws && !sheet) main.prepend(el); });
     main.onclick = (e) => {
@@ -139,7 +142,7 @@
         <div class="row"><button class="btn primary" data-a="share">📤 Share file</button><button class="btn" data-a="download">⬇ Download</button></div></div>
       <div class="card"><h3>🔗 Share link</h3><p class="hint">A link with the whole character inside. Tapping it opens the character in this app on any phone, which is handy for sending to yourself or a friend. Nothing is uploaded.</p>
         <button class="btn" data-a="link">🔗 Share link</button></div>
-      <div class="card"><h3>🖨 Print</h3><p class="hint">A printable sheet. Your phone's print screen can also save it as a PDF.</p><button class="btn" data-a="print">🖨 Print or save as PDF</button></div>
+      <div class="card"><h3>🖨 Print</h3><p class="hint">A printable sheet. Your phone's print screen can also save it as a PDF, and that PDF can be imported again here or added to a DM's campaign with nothing lost.</p><button class="btn" data-a="print">🖨 Print or save as PDF</button></div>
       <div class="card"><h3>✏ This character</h3><div class="row"><button class="btn" data-a="rename">Rename</button><button class="btn" data-a="copy">Duplicate</button><button class="btn danger" data-a="delete">Delete</button></div></div>`;
     el.addEventListener('click', (e) => {
       const a = e.target.closest('button') && e.target.closest('button').dataset.a;
@@ -174,15 +177,16 @@
     draw();
     return el;
   }
-  function printSheet(c) {
+  async function printSheet(c) {
     const f = Object.assign(document.createElement('iframe'), { style: 'position:fixed;width:0;height:0;border:0' });
-    f.srcdoc = CharSheet.printHtml({ ...c.model, name: c.name });
+    f.srcdoc = await CharSheet.printable({ ...c.model, name: c.name });
     f.onload = () => setTimeout(() => { f.contentWindow.focus(); f.contentWindow.print(); setTimeout(() => f.remove(), 60000); }, 300);
     document.body.append(f);
   }
   function openChar(id) {
     const c = byId(id);
     if (!c) return showList();
+    if (notesUi) { notesUi.destroy(); notesUi = null; }
     if (sheet) sheet.destroy();
     localStorage.setItem(CUR, id);
     $('#title').textContent = c.name;
@@ -190,12 +194,15 @@
     const main = $('#main');
     main.onclick = null;
     main.innerHTML = '<div id="sheet"></div>';
-    const rolls = rollsTab(c);
+    const rolls = rollsTab(c), notes = document.createElement('div');
+    // Session notes are kept with the character (c.notes), so they sync with it but never go into its character file.
+    notesUi = SessionNotes.mount(notes, { load: () => c.notes || '', save: (t) => { if (t === (c.notes || '')) return; c.notes = t; c.updated = Date.now(); saveSoon(); },
+      where: Cloud.user() ? 'They\'re kept with this character and sync with it.' : 'They\'re kept with this character on this phone.', fileName: () => `${c.name.replace(/[\\/:*?"<>|]/g, '')} notes.md` });
     sheet = CharSheet.mount($('#sheet'), {
       model: { ...c.model, name: c.name }, mode: 'solo', toast: (t) => toast(t),
       onChange: (m) => { c.model = CharSheet.clean(m); c.updated = Date.now(); saveSoon(); },
       onRoll: (e) => { c.rolls = [e, ...(c.rolls || [])].slice(0, 60); saveSoon(); rolls.redraw(); },
-      extraTabs: [{ id: 'rolls', label: '🎲 Rolls', el: rolls }, { id: 'file', label: '💾 File', el: fileTab(c) }],
+      extraTabs: [{ id: 'notes', label: '📝 Notes', el: notes }, { id: 'rolls', label: '🎲 Rolls', el: rolls }, { id: 'file', label: '💾 File', el: fileTab(c) }],
     });
     window.scrollTo(0, 0);
   }
@@ -210,7 +217,8 @@
   const setTombs = (t) => localStorage.setItem(TOMB, JSON.stringify(t));
   function addTomb(c) { setTombs([...tombs().filter(t => t.id !== c.id), { id: c.id, rev: c.cloudRev }]); }
   function scheduleSync(ms = 2000) { clearTimeout(syncTimer); if (Cloud.user()) syncTimer = setTimeout(sync, ms); }
-  const payload = (c) => ({ model: c.model, created: c.created || null });
+  const payload = (c) => ({ model: c.model, created: c.created || null, notes: c.notes || '' });
+  const notesOf = (d) => typeof d.notes === 'string' ? d.notes.slice(0, 200000) : '';
 
   // Signed in as someone else than last time. Characters that came from the other account's cloud wait for a
   // choice (syncCard): add them to this account too, or take them off this phone (they stay in the other account).
@@ -239,9 +247,9 @@
     }
     const m = row.data && row.data.model ? CharSheet.applyAuto(CharSheet.clean(row.data.model)) : null;
     if (!m) return;
-    if (!local) { chars.push({ id: row.id, name: row.name || 'Adventurer', model: m, created: row.data.created || Date.now(), updated: Date.now(), pushed: Date.now(), cloudRev: row.rev }); changed.add(row.id); return; }
+    if (!local) { chars.push({ id: row.id, name: row.name || 'Adventurer', model: m, notes: notesOf(row.data), created: row.data.created || Date.now(), updated: Date.now(), pushed: Date.now(), cloudRev: row.rev }); changed.add(row.id); return; }
     if (mine) return;                                           // both changed: the push below finds out and keeps both
-    Object.assign(local, { name: row.name || local.name, model: m, cloudRev: row.rev });
+    Object.assign(local, { name: row.name || local.name, model: m, notes: notesOf(row.data), cloudRev: row.rev });
     local.pushed = local.updated = Date.now();
     changed.add(row.id);
   }
@@ -259,7 +267,7 @@
       for (const t of tombs()) {
         const res = await Cloud.rpc('dmdesk_delete_character', { p_id: t.id, p_base_rev: t.rev });
         // Changed on another phone after it was deleted here: it comes back rather than losing those changes.
-        if (!res.ok && !byId(t.id)) { chars.push({ id: t.id, name: res.name || 'Adventurer', model: CharSheet.applyAuto(CharSheet.clean(res.data.model || {})), created: Date.now(), updated: Date.now(), pushed: Date.now(), cloudRev: res.rev }); changed.add(t.id); toast(`${res.name} was changed on another phone, so it was kept`); }
+        if (!res.ok && !byId(t.id)) { chars.push({ id: t.id, name: res.name || 'Adventurer', model: CharSheet.applyAuto(CharSheet.clean(res.data.model || {})), notes: notesOf(res.data), created: Date.now(), updated: Date.now(), pushed: Date.now(), cloudRev: res.rev }); changed.add(t.id); toast(`${res.name} was changed on another phone, so it was kept`); }
         setTombs(tombs().filter(x => x.id !== t.id));
       }
       for (const c of [...chars]) {
@@ -270,7 +278,7 @@
         if (res.ok) { c.cloudRev = res.rev; c.pushed = stamp; continue; }
         // Changed here and on another phone: this phone's version becomes a copy, the other one takes its place.
         const copy = { ...c, id: uid(), name: `${c.name} (this phone)`, cloudRev: undefined, pushed: 0, updated: Date.now(), rolls: [] };
-        Object.assign(c, { name: res.name || c.name, model: CharSheet.applyAuto(CharSheet.clean(res.data.model || {})), cloudRev: res.rev });
+        Object.assign(c, { name: res.name || c.name, model: CharSheet.applyAuto(CharSheet.clean(res.data.model || {})), notes: notesOf(res.data), cloudRev: res.rev });
         c.pushed = c.updated = Date.now();
         chars.push(copy); changed.add(c.id); changed.add(copy.id);
         toast(`${c.name} was changed on two phones: both versions are kept`);
@@ -284,7 +292,14 @@
       syncing = false;
     }
     const cur = localStorage.getItem(CUR);
-    if (sheet && cur && changed.has(cur)) { const c = byId(cur); if (c) { $('#title').textContent = c.name; sheet.set({ ...c.model, name: c.name }); } else showList(); }
+    if (sheet && cur && changed.has(cur)) {
+      const c = byId(cur);
+      if (c) {
+        $('#title').textContent = c.name; sheet.set({ ...c.model, name: c.name });
+        // Notes changed on another phone: show them, unless they're being typed in here.
+        if (notesUi && !(document.activeElement && document.activeElement.classList.contains('sn-text'))) notesUi.reload();
+      } else showList();
+    }
     else if (!sheet) showList();
     if (again) scheduleSync(500);
   }

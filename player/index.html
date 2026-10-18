@@ -57,7 +57,8 @@
   .join button:active { border-color: var(--accent); }
   .join .go { background: linear-gradient(180deg, #e0a458, #c8873a); color: #1d1408; font-weight: 700; border: none; margin-top: 8px; }
   .join .or { color: var(--dim); margin: 14px 0 8px; }
-  nav button { font-size: 13px; padding: 9px 2px; }
+  nav button { font-size: 11.5px; padding: 6px 1px 7px; min-width: 0; }
+  nav button i { display: block; font-style: normal; font-size: 18px; line-height: 1.3; }
   .date { font-size: 12px; color: var(--dim); text-align: center; padding: 6px 0 0; font-family: 'Cinzel', serif; }
   .date:empty { display: none; }
   /* Wiki */
@@ -106,8 +107,9 @@
   .ds { display: flex; gap: 14px; align-items: center; margin-top: 8px; font-size: 14px; }
   .pip { width: 14px; height: 14px; border-radius: 50%; border: 2px solid; display: inline-block; margin-right: 2px; }
   .pip.ok { border-color: var(--green); } .pip.ok.on { background: var(--green); } .pip.bad { border-color: var(--red); } .pip.bad.on { background: var(--red); }
-  .mynotes { width: 100%; min-height: 45vh; font-size: 16px; line-height: 1.5; padding: 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--text); resize: vertical; }
   .saved { font-size: 12px; color: var(--dim); text-align: right; }
+  .nhint { color: var(--dim); font-size: 13px; margin: 4px 0 10px; }
+  .nbtns { display: flex; gap: 8px; flex-wrap: wrap; }
   .rollpop { position: fixed; left: 12px; right: 12px; top: calc(12px + env(safe-area-inset-top)); z-index: 75; max-width: 420px; margin: 0 auto; background: var(--panel2); border: 2px solid var(--accent); border-radius: 14px; padding: 12px 16px; text-align: center; box-shadow: 0 14px 40px rgba(0,0,0,.6); transition: opacity .4s; }
   .rollpop.out { opacity: 0; }
   /* First-time tour */
@@ -152,12 +154,13 @@
 </div>
 <div id="app" hidden>
   <div class="date" id="date"></div>
-  <nav><button data-tab="turns" class="on">⏳ Turns</button><button data-tab="handouts">✉ Handouts <span class="badge" id="badge" hidden></span></button><button data-tab="wiki">📚 Wiki</button><button data-tab="map">🗺 Map <span class="badge" id="mapbadge" hidden>!</span></button><button data-tab="char">👤 Me</button></nav>
+  <nav><button data-tab="turns" class="on"><i>⏳</i>Turns</button><button data-tab="handouts"><i>✉</i>Handouts <span class="badge" id="badge" hidden></span></button><button data-tab="wiki"><i>📚</i>Wiki</button><button data-tab="map"><i>🗺</i>Map <span class="badge" id="mapbadge" hidden>!</span></button><button data-tab="notes"><i>📝</i>Notes</button><button data-tab="char"><i>👤</i>Me</button></nav>
   <main>
     <section class="pane" id="map"></section>
     <section class="pane on" id="turns"></section>
     <section class="pane" id="handouts"></section>
     <section class="pane" id="wiki"></section>
+    <section class="pane" id="notes"></section>
     <section class="pane" id="char"></section>
   </main>
 </div>
@@ -167,6 +170,9 @@
 <link rel="stylesheet" href="/shared/charsheet.css">
 <script src="/shared/charsheet-data.js"></script>
 <script src="/shared/charsheet.js"></script>
+<script src="/shared/session-notes.js"></script>
+<script src="/shared/charsheet-guide.js"></script>
+<script src="/shared/pdf-char.js"></script>
 <script>
 (() => {
   const $ = (s) => document.querySelector(s);
@@ -249,14 +255,14 @@
   }
   function join(name) {
     name = (name || '').trim(); if (!name) return;
-    me = name; store.set('dm.player', me); notesLoaded = false; maybeTour(); const ta = document.querySelector('#mebox .mynotes'); if (ta) ta.value = '';
+    me = name; store.set('dm.player', me); maybeTour(); if (notesUi) notesUi.reload();
     $('#join').hidden = true; $('#app').hidden = false; $('#me').hidden = false;
     connect();
   }
   $('#pcs').addEventListener('click', (e) => { const b = e.target.closest('button[data-name]'); if (b) join(b.dataset.name); });
   $('#goBtn').addEventListener('click', () => join($('#nameIn').value));
   $('#nameIn').addEventListener('keydown', (e) => { if (e.key === 'Enter') join(e.target.value); });
-  $('#me').addEventListener('click', () => { if (confirm('Switch character?')) { me = null; store.set('dm.player', ''); connect(); showJoin(); } });
+  $('#me').addEventListener('click', () => { if (confirm('Switch character?')) { if (notesUi) notesUi.flush(); me = null; store.set('dm.player', ''); connect(); showJoin(); } });
   document.querySelectorAll('nav button').forEach(b => b.addEventListener('click', () => tab(b.dataset.tab)));
   let currentTab = 'turns';
   function tab(t) {
@@ -264,7 +270,7 @@
     document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
     document.querySelectorAll('.pane').forEach(p => p.classList.toggle('on', p.id === t));
     if (t === 'map') { $('#mapbadge').hidden = true; requestAnimationFrame(() => fitMap(true)); }
-    if (t === 'char') loadNotes();
+    if (t === 'notes') openNotes();
   }
 
   function render() {
@@ -399,24 +405,18 @@
     c.addEventListener('wheel', (e) => { e.preventDefault(); const r = c.getBoundingClientRect(); zoomAt(e.deltaY < 0 ? 1.12 : 1 / 1.12, e.clientX - r.left, e.clientY - r.top); }, { passive: false });
   }
 
-  // ---------- Me: character sheet, token and private notes ----------
+  // ---------- Me: character sheet, token and character file ----------
   // The sheet (shared/charsheet.js) is mounted once per character. Edits are sent to the DM app, which saves them;
   // updates coming back are skipped for a moment after the player's own edit so typing isn't interrupted.
-  let notesLoaded = false, notesTimer = null, sheet = null, sheetFor = null, sheetSent = 0, sheetTimer = null, lastIncoming = '';
+  let sheet = null, sheetFor = null, sheetSent = 0, sheetTimer = null, lastIncoming = '';
   const feedSeen = new Set(); let feedPrimed = false;
   let meBoxEl = null;
   function meBox() {
     if (meBoxEl) return meBoxEl;
     const box = meBoxEl = document.createElement('div'); box.id = 'mebox';
-    box.innerHTML = `<div class="card" id="tokcard"></div><div class="card"><div style="display:flex;justify-content:space-between;align-items:center"><b>📝 My notes</b><span class="saved" id="saved"></span></div><p style="color:var(--dim);font-size:13px;margin:4px 0 8px">Only you see these. ${net.notesWhere}</p><textarea class="mynotes" placeholder="Names, clues, loot, things to remember…"></textarea></div><div class="card" id="charfile"><b>📜 Character file</b><p style="color:var(--dim);font-size:13px;margin:4px 0 10px">Made your character in the Dungeons Desk character sheet app? Import it here. Or save this sheet to keep using it there.</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-cf="import">⇩ Import my sheet</button><button class="btn" data-cf="export">⬇ Save my sheet</button></div></div><button class="btn" id="replaytour" style="width:100%;margin-bottom:16px">❓ Show the tour again</button>`;
+    box.innerHTML = `<div class="card" id="tokcard"></div><div class="card" id="charfile"><b>📜 Character file</b><p class="nhint">Made your character in the Dungeons Desk character sheet app, or on D&amp;D Beyond? Import its file or PDF here. Or save this sheet to keep using it there.</p><div class="nbtns"><button class="btn" data-cf="import">⇩ Import my sheet</button><button class="btn" data-cf="export">⬇ Save my sheet</button></div></div><div class="card"><b>🖨 Printed sheet</b><p class="nhint">Your character on a regular paper character sheet. Your phone's print screen can also save it as a PDF, which opens again in any Dungeons Desk sheet.</p><button class="btn" data-cf="print">🖨 Print or save as PDF</button></div><button class="btn" id="replaytour" style="width:100%;margin-bottom:16px">❓ Show the tour again</button>`;
     box.querySelector('#replaytour').addEventListener('click', startTour);
-    box.querySelector('#charfile').addEventListener('click', (e) => { const a = e.target.dataset.cf; if (a === 'import') importSheet(); else if (a === 'export') exportSheet(); });
-    box.querySelector('.mynotes').addEventListener('input', (e) => {
-      $('#saved').textContent = 'Saving…';
-      clearTimeout(notesTimer);
-      notesTimer = setTimeout(() => net.notesSet(e.target.value)
-        .then(() => { $('#saved').textContent = 'Saved'; }).catch(() => { $('#saved').textContent = 'Not saved — reconnecting'; }), 700);
-    });
+    box.addEventListener('click', (e) => { const a = e.target.dataset.cf; if (a === 'import') importSheet(); else if (a === 'export') exportSheet(); else if (a === 'print') printSheet(); });
     return box;
   }
   const liveOf = (c) => ({ inCombat: c.inCombat, hp: c.hp, maxHp: c.maxHp, ac: c.ac, conditions: c.conditions || [], deathSaves: c.deathSaves });
@@ -436,9 +436,17 @@
     const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(f), download: CharSheet.fileName(data.card.name) });
     document.body.append(a); a.click(); a.remove();
   }
+  // The printable sheet (CharSheet.printHtml), printed from a hidden frame like the sheet app does.
+  async function printSheet() {
+    if (!sheet || !data.card) return toast('Your sheet appears here once the DM adds you to the party');
+    const f = Object.assign(document.createElement('iframe'), { style: 'position:fixed;width:0;height:0;border:0' });
+    f.srcdoc = await CharSheet.printable({ ...sheet.get(), name: data.card.name });
+    f.onload = () => setTimeout(() => { f.contentWindow.focus(); f.contentWindow.print(); setTimeout(() => f.remove(), 60000); }, 300);
+    document.body.append(f);
+  }
   const pickCharFile = () => new Promise((res) => {
-    const inp = Object.assign(document.createElement('input'), { type: 'file', accept: '.json,application/json' });
-    inp.onchange = async () => { if (!inp.files[0]) return res(null); try { res(CharSheet.fromFile(await inp.files[0].text())); } catch (e) { toast(e.message); res(null); } };
+    const inp = Object.assign(document.createElement('input'), { type: 'file', accept: CharSheet.FILE_TYPES });
+    inp.onchange = async () => { if (!inp.files[0]) return res(null); try { res(await CharSheet.readFile(inp.files[0])); } catch (e) { toast(e.message); res(null); } };
     inp.click();
   });
   // Not in the party yet: send the file to the DM, who adds it from their 📣 feed.
@@ -450,11 +458,11 @@
   }
   function importSheet() {
     if (!sheet || !data.card) return offerSheet();
-    const inp = Object.assign(document.createElement('input'), { type: 'file', accept: '.json,application/json' });
+    const inp = Object.assign(document.createElement('input'), { type: 'file', accept: CharSheet.FILE_TYPES });
     inp.onchange = async () => {
       if (!inp.files[0]) return;
       let c;
-      try { c = CharSheet.fromFile(await inp.files[0].text()); } catch (e) { return toast(e.message); }
+      try { c = await CharSheet.readFile(inp.files[0]); } catch (e) { return toast(e.message); }
       if (!confirm(`Replace your sheet with ${c.name || 'the one in this file'}? Your name in the game stays ${data.card.name}.`)) return;
       sheet.set({ ...c.model, name: data.card.name }, liveOf(data.card));
       sendSheet(c.model);
@@ -467,7 +475,7 @@
     const hbChanged = CharSheet.setHomebrew(data.homebrew || {});
     if (!c) {
       if (sheet) { sheet.destroy(); sheet = null; sheetFor = null; }
-      el.innerHTML = `<div class="card"><div class="pcname">${esc(me || '')}</div><p style="color:var(--dim)">Ask the DM to add your character to the party in their Settings. Then your character sheet appears here.</p><p style="color:var(--dim)">Made your character in the Dungeons Desk character sheet app? Send it, and the DM adds it with one tap.</p><button class="btn primary" id="offerbtn">📜 Send my character file to the DM</button></div>`;
+      el.innerHTML = `<div class="card"><div class="pcname">${esc(me || '')}</div><p style="color:var(--dim)">Ask the DM to add your character to the party in their Settings. Then your character sheet appears here.</p><p style="color:var(--dim)">Made your character in the Dungeons Desk character sheet app, or have a character sheet PDF (from D&amp;D Beyond, say)? Send it, and the DM adds it with one tap.</p><button class="btn primary" id="offerbtn">📜 Send my character to the DM</button></div>`;
       el.querySelector('#offerbtn').addEventListener('click', offerSheet);
       el.append(box);
     } else if (!sheet || sheetFor !== c.name) {
@@ -475,7 +483,7 @@
       el.innerHTML = '<div id="pcsheet"></div>';
       sheetFor = c.name; lastIncoming = JSON.stringify(c.model);
       sheet = CharSheet.mount(el.querySelector('#pcsheet'), { model: c.model, live: liveOf(c), mode: 'player', onChange: sendSheet, onShare: shareToDm,
-        extraTabs: [{ id: 'me', label: '📝 Notes', el: box }] });
+        extraTabs: [{ id: 'me', label: '🪙 Token & file', el: box }] });
     } else {
       const incoming = JSON.stringify(c.model);
       if (incoming !== lastIncoming && Date.now() - sheetSent > 2500) { lastIncoming = incoming; sheet.set(c.model, liveOf(c)); }
@@ -554,9 +562,13 @@
     x.lineWidth = 2; x.strokeStyle = 'rgba(0,0,0,.5)'; x.beginPath(); x.arc(S / 2, S / 2, R - bw, 0, Math.PI * 2); x.stroke();
   }
 
-  function loadNotes() {
-    if (notesLoaded || !me) return;
-    net.notesGet().then(t => { const ta = document.querySelector('#mebox .mynotes'); if (ta && !ta.value) ta.value = t; notesLoaded = true; }).catch(() => {});
+  // ---------- Notes: private session notes (shared/session-notes.js), kept by net.notesGet/notesSet ----------
+  // Mounted the first time the tab opens, and loaded again when someone else joins on this phone.
+  let notesUi = null;
+  function openNotes() {
+    if (notesUi || !me) return;
+    notesUi = SessionNotes.mount($('#notes'), { load: () => net.notesGet(), save: (t) => net.notesSet(t), where: net.notesWhere,
+      fileName: () => `${(me || 'My').replace(/[\\/:*?"<>|]/g, '')} notes.md` });
   }
 
   function renderTurns() {
@@ -616,7 +628,8 @@
     { tab: 'handouts', icon: '✉', title: () => 'Handouts', body: 'Letters, clues, wanted posters and secrets from the DM pop up here, and some are just for you. A red badge means something new.' },
     { tab: 'wiki', icon: '📚', title: () => 'Wiki', body: 'People, places and lore the DM has shared with the party. Tap a highlighted name to jump to that page.' },
     { tab: 'map', icon: '🗺', title: () => 'Map', body: 'When the DM shows a map:<ul><li><b>✋ Move</b>: drag your own token. Fog clears as you explore.</li><li><b>📏 Measure</b>: drag to measure (1 square = 5 ft).</li><li><b>📍 Ping</b>: tap to point something out.</li></ul>Pinch to zoom, drag to look around.' },
-    { tab: 'char', icon: '📜', title: () => 'Your character sheet', body: 'Your whole character: stats, attacks, spells, gear and features. Tap <b>✏ Edit</b> to set it up; picking your class and level fills in the rest.<ul><li><b>Tap a save, skill, attack or spell</b> to roll it. The DM sees the result.</li><li><b>📤 Show the DM</b> sends them a spell, feature or item.</li></ul>Your token picture and private notes are under <b>📝 Notes</b>, along with <b>⇩ Import my sheet</b> for a character you made in the Dungeons Desk character sheet app. Not in the party yet? <b>Send my character file to the DM</b> and they add you with one tap.' },
+    { tab: 'notes', icon: '📝', title: () => 'Session notes', body: 'Your private notebook. Tap <b>＋ Start today\'s notes</b> each session and jot down names, clues and loot. Older sessions fold up underneath, and <b>⬇ Save as a file</b> keeps a copy.' },
+    { tab: 'char', icon: '📜', title: () => 'Your character sheet', body: 'Your whole character: stats, attacks, spells, gear and features. New character? <b>✨ Make my character step by step</b> walks you through every choice, or tap <b>✏ Edit</b> and fill it in yourself.<ul><li><b>Tap a save, skill, attack or spell</b> to roll it. The DM sees the result.</li><li><b>📤 Show the DM</b> sends them a spell, feature or item.</li></ul>Under <b>🪙 Token &amp; file</b>: your token picture, <b>🖨 Print</b> for a paper copy or PDF of your sheet, and <b>⇩ Import my sheet</b> for a character file or a character sheet PDF (from D&amp;D Beyond, say). Not in the party yet? <b>Send my character to the DM</b> and they add you with one tap.' },
     { tab: 'turns', icon: '🎲', title: () => 'You\'re all set!', body: 'Tip: add this page to your home screen (browser menu → "Add to Home screen") so it\'s one tap away next session. You can replay this tour from the 👤 Me tab.' },
   ];
   let tourStep = -1;

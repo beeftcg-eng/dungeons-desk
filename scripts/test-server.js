@@ -140,6 +140,9 @@ test('notes: each player has their own page, and odd names stay inside the playe
   assert.strictEqual((await req('POST', '/api/notes', { player: 'Thorin', body: 'my notes' })).status, 204);
   assert.strictEqual((await req('GET', '/api/notes', { player: 'THORIN' })).body, 'my notes', 'names are case-insensitive');
   assert.strictEqual((await req('GET', '/api/notes', { player: 'Elara' })).body, '');
+  const long = '## Session 1\n' + 'x'.repeat(200000);
+  assert.strictEqual((await req('POST', '/api/notes', { player: 'Thorin', body: long })).status, 204, 'a long campaign of session notes fits');
+  assert.strictEqual((await req('GET', '/api/notes', { player: 'Thorin' })).body, long);
   assert.strictEqual((await req('POST', '/api/notes', { player: '../../escape', body: 'x' })).status, 204);
   const files = fs.readdirSync(path.join(dirs.vault, '.dmtools', 'players'));
   assert.ok(files.every(f => !f.includes('/')) && files.includes(encodeURIComponent('../../escape') + '.txt'));

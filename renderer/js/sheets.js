@@ -148,10 +148,10 @@ window.Sheets = (() => {
     if (!p.name) return toast('Give the character a name first', 'err');
     CharSheet.setHomebrew(allHomebrew());
     const box = h('div.sheet-host');
-    const print = (mode) => dm.print.html(CharSheet.printHtml(modelOf(p)), mode, `${p.name} character sheet.pdf`).then(r => { if (r && mode === 'pdf') toast('Saved ' + r); });
+    const print = async (mode) => dm.print.html(await CharSheet.printable(modelOf(p)), mode, `${p.name} character sheet.pdf`).then(r => { if (r && mode === 'pdf') toast('Saved ' + r); });
     const m = U.modal(`📜 ${p.name}`, [h('div.row', h('p.dim.small.grow', `Changes are saved and show up on ${p.player || p.name}'s phone. Rolls you make here stay on your screen.`),
       h('button.small', { onclick: () => print('print') }, '🖨 Print'), dm.isWeb ? null : h('button.small', { onclick: () => print('pdf') }, '📄 Save as PDF'),
-      h('button.small', { title: 'Replace this sheet with a character file (.ddchar.json)', onclick: () => importInto(p) }, '⇩ Import'),
+      h('button.small', { title: 'Replace this sheet with a character file (.ddchar.json) or a character sheet PDF (D&D Beyond, the official fillable sheet, or printed from Dungeons Desk)', onclick: () => importInto(p) }, '⇩ Import'),
       h('button.small', { title: 'Save this sheet as a character file the player can open in the phone character sheet', onclick: () => exportSheet(p) }, '⇧ Export'),
       h('button.small', { title: 'Copy a link that opens this character in the phone character sheet app (handy for pre-made characters)', onclick: () => copyLink(p) }, '🔗 Link')), box],
       { onClose: () => { if (open) open.api.destroy(); open = null; } });
@@ -164,12 +164,14 @@ window.Sheets = (() => {
     open = { p, api, modal: m };
   }
 
-  // ---------- Character files (CharSheet.toFile / fromFile) ----------
+  // ---------- Character files (CharSheet.toFile / fromFile) and PDFs (shared/pdf-char.js) ----------
   async function readCharFile() {
-    const f = await U.pickFile('.json,application/json');
+    const f = await U.pickFile(CharSheet.FILE_TYPES);
     if (!f) return null;
-    try { return CharSheet.fromFile(await f.text()); } catch (e) { toast(e.message, 'err'); return null; }
+    try { return await CharSheet.readFile(f); } catch (e) { toast(e.message, 'err'); return null; }
   }
+  // A fillable PDF only holds what its boxes said, so say what to look over.
+  const pdfNote = (c) => c.from === 'form' ? ' from the PDF. Check its gear, spells and features: a PDF doesn\'t hold everything' : '';
   function exportSheet(p) {
     U.download(new Blob([JSON.stringify(CharSheet.toFile(modelOf(p)))], { type: 'application/json' }), CharSheet.fileName(p.name));
   }
@@ -182,9 +184,9 @@ window.Sheets = (() => {
     if (!await U.confirm('Replace sheet', `Replace ${p.name}'s sheet with ${c.name ? `“${c.name}”` : 'the one in this file'}? The name, player and token stay as they are.`)) return;
     apply(p, c.model);
     if (open && open.p === p) open.api.set(modelOf(p), liveOf(p));
-    toast('Sheet imported');
+    toast('Sheet imported' + pdfNote(c));
   }
-  // Settings → "Add from a character file": a new party member from a player's exported sheet.
+  // Settings → "Add from a file or PDF": a new party member from a player's character file or sheet PDF.
   async function importNew() {
     const c = await readCharFile();
     if (!c) return false;
@@ -193,7 +195,7 @@ window.Sheets = (() => {
     const p = { name, player: '', token: null };
     party().push(p);
     apply(p, c.model);
-    toast(`Added ${name} to the party`);
+    toast(`Added ${name} to the party${pdfNote(c)}`);
     return true;
   }
 

@@ -158,7 +158,7 @@ class PlayerServer {
       return;
     }
 
-    // Each player's private notes page: one small text file per player name.
+    // Each player's private notes (a section per session): one text file per player name, up to 500 kB.
     if (p === '/api/notes') {
       const name = (url.searchParams.get('player') || '').trim().toLowerCase().slice(0, 40);
       if (!name) { res.writeHead(400); return res.end(); }
@@ -170,7 +170,7 @@ class PlayerServer {
       }
       if (req.method === 'POST') {
         let body = '';
-        req.on('data', (chunk) => { body += chunk; if (body.length > 50000) req.destroy(); });
+        req.on('data', (chunk) => { body += chunk; if (body.length > 500000) req.destroy(); });
         req.on('end', () => {
           fs.mkdirSync(dir, { recursive: true });
           fs.writeFile(file, body, () => { res.writeHead(204); res.end(); });

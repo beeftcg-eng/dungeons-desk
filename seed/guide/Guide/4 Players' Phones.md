@@ -14,11 +14,13 @@ Players on the same Wi-Fi scan the QR code on the **⏳ Initiative** page. They 
 | ✉ Handouts | Your letters and clues, sent from **✉ Handouts → Reveal** |
 | 📚 Wiki | Notes you've shared with **👥 Share** |
 | 🗺 Map | The map you're showing. They can **move their own token**, **measure** and **ping**. |
-| 👤 Me | Their **character sheet** (see below), plus a **token maker** for their character's picture and private notes (under 📝 Notes) |
+| 📝 Notes | Private **session notes**: **＋ Start today's notes** adds a section for each session, older ones fold up underneath, and **⬇ Save as a file** downloads them all. On your Wi-Fi they're kept on your computer (in `.dmtools/players/`); at an online table they stay on the phone. |
+| 👤 Me | Their **character sheet** (see below). Its **🪙 Token & file** tab has a **token maker** for their character's picture, **🖨 Print or save as PDF** for a regular paper sheet, and the character file buttons |
 
 ## Character sheets 📜
 Each character in **⚙ Settings → Party** has a full character sheet. Players fill in their own on the 👤 Me tab, and you can open anyone's with the 📜 button in the party table.
 
+- **✨ Step by step.** A blank sheet starts with **✨ Make my character step by step**: a guide through class, species, background, ability scores (standard set, rolled, or typed), skills, starting equipment and spells, explaining each choice for new players. The phone sheet app opens it for every new character, and **Skip guide** leaves it any time.
 - **Autofill.** Tap **✏ Edit**, then pick a class, level, species and background, and type the ability scores (standard array: 15, 14, 13, 12, 10, 8). The sheet works out the proficiency bonus, saving throws, skills, hit points, AC from the armor they wear, attacks from their weapons, spell save DC, spell slots, class resources (Rage, Focus Points…) and every feature up to their level.
 - **Everything is editable.** In *About → Numbers*, untick **Auto** to type an AC, max HP, initiative or speed by hand. Typing one of those in the Settings party table does the same.
 - **Gear.** Search the SRD weapons, armor, gear and magic items, or type anything to add your own. **🎒 Take your starting equipment** adds the class and background kit, with packs unpacked into their contents. Equipped armor sets AC, and equipped weapons appear under *Actions*.
@@ -27,7 +29,7 @@ Each character in **⚙ Settings → Party** has a full character sheet. Players
 - **⬆ Level up** (on *Features*, or in ✏ Edit) walks through it. It shows HP (take the average or roll), the subclass choice when it's due, the Ability Score Improvement or feat, the new features, and what changes for spells.
 - **Multiclassing.** In ✏ Edit, **＋ Add a class**. The level box is the total level, and the first class gets whatever isn't in the others. Saving throws come from the first class. Proficiency uses the total level, and HP adds each class's hit dice. With two spellcasting classes, slots follow the multiclass table; Warlock Pact Magic slots are tracked separately.
 - **Concentration.** Casting a concentration spell shows ◎ *spell name* at the top of the sheet. Tap it to stop concentrating.
-- **🖨 Print / 📄 Save as PDF**: on your screen, in the sheet window.
+- **🖨 Print / 📄 Save as PDF**: on your screen, in the sheet window. Players print their own from **👤 Me → 🪙 Token & file**. The printed sheet carries a link with the whole character, so a PDF saved from Dungeons Desk can be imported again with nothing lost.
 
 **Rolling for you.** When a player taps a save, skill, attack or spell and chooses **🎲 Roll and send to the DM**, *your app* rolls it, so results are fair. The result pops up on your screen and in the **📣 player feed** (bottom right), and goes back to that player's phone only. Players with real dice can type their total instead. **📤 Show the DM** sends you the text of a spell, feature or item. Rolls you make from a sheet on your own screen stay on your screen, which is handy for secret checks.
 
@@ -40,14 +42,18 @@ During combat the initiative tracker owns HP. Players tap their HP to *report* d
 Players don't need your game running to use their sheet. The phone app at **beeftcg-eng.github.io/dungeons-desk** has an **I'm a player** page: the same character sheet, working on its own and saved on their phone. They can build a character before session zero, roll from it, level up and track everything between sessions. Rolls there are made on the phone itself.
 
 To bring that character into your game:
-- **You add it.** The player opens their character's **💾 File** tab and sends you the file (📤 Share file). In **⚙ Settings → Party**, click **⇩ Add from a character file**. To update someone who's already in the party, open their **📜** sheet and click **⇩ Import**.
+- **You add it.** The player opens their character's **💾 File** tab and sends you the file (📤 Share file). In **⚙ Settings → Party**, click **⇩ Add from a file or PDF**. To update someone who's already in the party, open their **📜** sheet and click **⇩ Import**.
+- **From a PDF.** The same buttons take a character sheet PDF:
+  - **Printed from Dungeons Desk** (🖨 Print → Save as PDF): comes back exactly.
+  - **A fillable sheet**, such as D&D Beyond's PDF export or the official 5e sheet: its boxes are read. Scores, class and level, species, background, skills, saves, gear, attacks and spells come over, and AC and HP are kept as written if the sheet would work them out differently. Features become one "From the PDF" note. Look it over afterwards: a PDF doesn't hold everything.
+  - A scanned or flattened PDF (a picture of a sheet) and password-locked PDFs can't be read.
 - **They send it.** A player who isn't in the party yet joins your game under their character's name. Then, on **👤 Me**, they tap **📜 Send my character file to the DM**. It appears in your **📣 feed** with **➕ Add to party** (or Decline). Nothing changes until you accept.
-- **They import it.** If they're already in the party, they use **👤 Me → 📝 Notes → ⇩ Import my sheet**.
+- **They import it.** If they're already in the party, they use **👤 Me → 🪙 Token & file → ⇩ Import my sheet** (a character file or PDF).
 - **A link.** **💾 File → 🔗 Share link** makes a link with the whole character inside it. Tapping it opens the character in the sheet app on any phone, and nothing is uploaded. To hand out a pre-made character, open its sheet here and click **🔗 Link**.
 
 **☁ Sync your characters** (on the sheet app's character list) signs in with a Pawmodoro account, so characters follow a player to every phone and survive a lost one. If the same character was changed on two phones before they synced, both versions are kept.
 
-The sheet app also keeps a **🎲 Rolls** log for each character, shows a **portrait** (tap the picture spot in ✏ Edit), lists every character's AC, HP and passive Perception, and reminds players to save a copy now and then.
+The sheet app also keeps **📝 Notes** for each character (session notes like the game page's, saved and synced with the character but never put in its character file), a **🎲 Rolls** log, shows a **portrait** (tap the picture spot in ✏ Edit), lists every character's AC, HP and passive Perception, and reminds players to save a copy now and then.
 
 It works the other way too. **⇧ Export** in a sheet window (or **⬇ Save my sheet** on their phone) gives them a file to open in the character sheet app between sessions.
 

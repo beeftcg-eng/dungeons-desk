@@ -58,7 +58,7 @@ window.Settings = (() => {
           h('table.party-table', h('thead', h('tr', ['Character', 'Player', 'Class', 'Level', 'Init', 'AC', 'Max HP', 'Sheet', 'Token', ''].map(t => h('th', t)))), h('tbody', party.map(row))),
           h('div.row',
             h('button', { onclick: () => { party.push({ name: '', player: '', cls: '', level: 1, initBonus: 0, ac: '', hp: '' }); Store.save(); draw(); } }, '+ Add character'),
-            h('button', { title: 'A .ddchar.json file a player exported from the Dungeons Desk character sheet', onclick: () => Sheets.importNew().then(ok => ok && draw()) }, '⇩ Add from a character file'))),
+            h('button', { title: 'A .ddchar.json file from the Dungeons Desk character sheet, or a character sheet PDF (D&D Beyond, the official fillable sheet, or printed from Dungeons Desk)', onclick: () => Sheets.importNew().then(ok => ok && draw()) }, '⇩ Add from a file or PDF'))),
         h('div.card',
           h('h3', '🗺 Campaign'),
           dm.isWeb ? h('p', 'Campaign: ', h('b', vault), '. On the phone app, notes, handouts, tokens and everything else are saved on this device. Export a campaign file to move it to or from the desktop app.')

@@ -312,6 +312,19 @@ window.CharSheet = (() => {
       spellClasses: castings.map(x => x.cls), stealthDis: !!(armor && armor.g.stealthDis) };
   }
 
+  // Add gear to a model by name; packs are unpacked so each torch and ration can be tracked. Weapons, and the first
+  // armor and shield, are equipped.
+  function addItemTo(model, name, qty = 1, label) {
+    const g = findGear(name);
+    if (g && g.contents && /pack$/i.test(g.name)) { g.contents.forEach(c => addItemTo(model, c.name, c.count * qty)); return; }
+    const nm = (g || findMagic(name)) ? (g || findMagic(name)).name : (label || name);
+    const have = model.sheet.items.find(x => x.name.toLowerCase() === nm.toLowerCase() && !(g && ['weapon', 'armor', 'shield'].includes(g.kind)));
+    if (have) { have.qty += qty; return; }
+    const it = { id: uid(), name: label && !g ? label : nm, qty, equipped: false, attuned: false, bonus: 0, weight: null, notes: '' };
+    if (g && (g.kind === 'weapon' || ((g.kind === 'armor' || g.kind === 'shield') && !model.sheet.items.some(x => x.equipped && (findGear(x.name) || {}).kind === g.kind)))) it.equipped = true;
+    model.sheet.items.push(it);
+  }
+
   // ---------- The interactive sheet ----------
   // opts: { model, live, mode: 'player'|'dm'|'solo', onChange(model), onShare(share) → Promise, onRoll(entry) (solo only), toast(text), extraTabs: [{id, label, el}] }
   // 'solo' is the standalone sheet with no DM: it rolls on the phone itself and has nobody to show cards to.
@@ -399,6 +412,7 @@ window.CharSheet = (() => {
     function setupCard() {
       const d = DATA(), c = D.c;
       return `<div class="cs-card cs-setup"><h4>${model.cls ? 'Your character' : 'Start here'}</h4>
+        ${!model.cls && window.CharGuide ? '<button class="cs-btn primary big" data-act="guide">✨ Make my character step by step</button><p class="cs-hint">New to D&amp;D? The guide explains each choice as you go. Or fill in the boxes below yourself.</p>' : ''}
         <p class="cs-hint">Pick your class, level, species and background. The sheet fills in your proficiency bonus, saving throws, hit points, features and spell slots.</p>
         <div class="cs-grid2">
           ${field('Class', 'cls', model.cls, 'text', 'list="cs-dl-class" placeholder="e.g. Fighter"')}
@@ -819,17 +833,7 @@ window.CharSheet = (() => {
       });
     }
 
-    // Add gear by name; packs are unpacked so each torch and ration can be tracked.
-    function addItem(name, qty = 1, label) {
-      const g = findGear(name);
-      if (g && g.contents && /pack$/i.test(g.name)) { g.contents.forEach(c => addItem(c.name, c.count * qty)); return; }
-      const nm = (g || findMagic(name)) ? (g || findMagic(name)).name : (label || name);
-      const have = model.sheet.items.find(x => x.name.toLowerCase() === nm.toLowerCase() && !(g && ['weapon', 'armor', 'shield'].includes(g.kind)));
-      if (have) { have.qty += qty; return; }
-      const it = { id: uid(), name: label && !g ? label : nm, qty, equipped: false, attuned: false, bonus: 0, weight: null, notes: '' };
-      if (g && (g.kind === 'weapon' || ((g.kind === 'armor' || g.kind === 'shield') && !model.sheet.items.some(x => x.equipped && (findGear(x.name) || {}).kind === g.kind)))) it.equipped = true;
-      model.sheet.items.push(it);
-    }
+    const addItem = (name, qty = 1, label) => addItemTo(model, name, qty, label);
 
     // ---------- Autocomplete search (gear, spells, feats) ----------
     function search(kind, q) {
@@ -898,6 +902,7 @@ window.CharSheet = (() => {
       const act = b.dataset.act, s = model.sheet;
       if (act === 'edit') { edit = !edit; return render(); }
       if (act === 'portrait') return portraitDialog();
+      if (act === 'guide') return openGuide();
       if (act === 'roll') return rollDialog(b.dataset.label, num(b.dataset.bonus), b.dataset.nomod === '1', b.dataset.tag);
       if (act === 'damage') return share({ kind: 'damage', label: b.dataset.label, expr: b.dataset.expr });
       if (act === 'attack') return attackDialog(D.attacks[Number(b.dataset.i)]);
@@ -973,7 +978,14 @@ window.CharSheet = (() => {
     root.addEventListener('focusin', (e) => { if (e.target.classList.contains('cs-ac')) drawResults(e.target); });
     root.addEventListener('focusout', () => setTimeout(() => { if (pending && !root.contains(document.activeElement)) { const p = pending; pending = null; api.set(p.model, p.live); } }, 50));
 
+    // ✨ Guided character creation (shared/charsheet-guide.js); the sheet only changes when the player finishes it.
+    function openGuide() {
+      if (!window.CharGuide) return;
+      CharGuide.open({ ...model, name }, { onDone: (m) => { model = m; edit = false; tab = 'main'; commit(); window.scrollTo(0, 0); toast(`${name || 'Your character'} is ready!`); } });
+    }
+
     const api = {
+      guide: openGuide,
       // New data from outside (the DM app, or the player's phone). Waits while someone is typing in the sheet.
       set(m, l) {
         if (root.contains(document.activeElement) && document.activeElement.matches('input, textarea, select')) { pending = { model: m, live: l }; live = l; renderHead(); return; }
@@ -987,7 +999,9 @@ window.CharSheet = (() => {
   }
 
   // A printable character sheet: a complete HTML document for the DM app's print / save-as-PDF.
-  function printHtml(input) {
+  // opts.link (printable() makes it) is a share link with the whole character, printed as a link at the bottom: a PDF
+  // keeps it, so the PDF can be added to a campaign or opened in the sheet app with nothing lost (shared/pdf-char.js).
+  function printHtml(input, opts = {}) {
     const m = prepare(input), name = input.name || 'Character', s = m.sheet, D = derive(m);
     const cls = D.parts.map(x => `${x.c ? x.c.name : x.name} ${x.lvl}${x.sub ? ` (${x.sub})` : ''}`).join(' / ');
     const row = (a, b) => `<tr><td>${a}</td><td class="n">${b}</td></tr>`;
@@ -1033,6 +1047,7 @@ window.CharSheet = (() => {
       ${BIO.some(([k]) => s.bio[k]) ? box('Who they are', BIO.filter(([k]) => s.bio[k]).map(([k, l]) => `<p><b>${l}.</b> ${lines(s.bio[k])}</p>`).join('')) : ''}
     </div>
     ${box('Features & traits', D.features.map(f => `<div class="feat"><b>${esc(f.name)}</b> <span class="muted">${esc(f.src)}${f.level ? ' ' + f.level : ''}</span><br>${fmt(f.desc || '')}</div>`).join(''), 'feats')}
+    ${opts.link ? `<p class="muted">🔗 <a href="${esc(opts.link)}" style="color:#58180d">Open ${esc(name)} in Dungeons Desk</a>. A DM can add this PDF to a campaign: Settings → Party → Add from a file or PDF.</p>` : ''}
     <p class="muted">Made with Dungeons Desk. Rules text from the System Reference Document 5.2 (CC-BY-4.0).</p>
     </body></html>`;
   }
@@ -1102,7 +1117,24 @@ window.CharSheet = (() => {
     try { text = new TextDecoder().decode(await pipe(bytes, new DecompressionStream('deflate-raw'))); } catch { throw new Error('That link is damaged. Ask for it again.'); }
     return fromFile(text);
   }
+  // The printable sheet with its link (see printHtml).
+  async function printable(m) {
+    let link = null;
+    try { link = await toLink(m); } catch { /* an old browser: print without it */ }
+    return printHtml(m, { link });
+  }
+  // A file someone picked: a character file, or a PDF (shared/pdf-char.js, where the page loads it). → {name, model}
+  const FILE_TYPES = '.json,application/json,.pdf,application/pdf';
+  async function readFile(file) {
+    if (file.size > 40e6) throw new Error('That file is too big to be a character.');
+    const head = new Uint8Array(await file.slice(0, 5).arrayBuffer());
+    if (String.fromCharCode(...head) === '%PDF-') {
+      if (!window.PdfChar) throw new Error('PDFs can\'t be read here. Use a character file (.ddchar.json).');
+      return window.PdfChar.read(await file.arrayBuffer(), file.name);
+    }
+    return fromFile(await file.text());
+  }
   const fileName = (name) => `${String(name || 'Character').replace(/[\\/:*?"<>|]/g, '').trim() || 'Character'}.ddchar.json`;
 
-  return { mount, setHomebrew, printHtml, derive, clean, prepare, applyAuto, cleanShare, resolve, rollDice, feedHtml, fmt, toFile, fromFile, fileName, toLink, fromLink, SHEET_URL };
+  return { mount, setHomebrew, printHtml, addItemTo, data: DATA, AB, AB_NAME, ALIGN, BIO, derive, clean, prepare, applyAuto, cleanShare, resolve, rollDice, feedHtml, fmt, toFile, fromFile, fileName, toLink, fromLink, SHEET_URL, printable, readFile, FILE_TYPES };
 })();
