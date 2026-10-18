@@ -486,6 +486,14 @@ td .src { margin-left: 8px; }
 .imp-o5 { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 16px; margin-top: 8px; }
 .imp-results { max-height: 58vh; overflow: auto; background: var(--bg2); border-radius: 8px; padding: 4px; }
 .imp-filelist { max-height: 40vh; overflow: auto; display: flex; flex-direction: column; margin: 8px 0; }
+.imp-book-intro { max-width: 640px; display: grid; gap: 10px; justify-items: start; padding: 8px 0; }
+.imp-book-progress { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 30px 0; }
+.imp-book-progress progress { flex: 1; min-width: 200px; accent-color: var(--accent); }
+.imp-book-row { display: flex; gap: 8px; align-items: flex-start; }
+.imp-book-row input[type=checkbox] { margin-top: 3px; flex: none; }
+.imp-book-bulk { position: sticky; top: -4px; background: var(--bg2); padding: 4px 6px; z-index: 1; }
+.imp-warn { color: var(--warn, #e0a030); }
+.imp-book-raw pre { white-space: pre-wrap; font-size: 12px; max-height: 30vh; overflow: auto; background: var(--bg2); padding: 8px; border-radius: 6px; }
 .imp-body .row input { flex: 1; }
 
 /* ===== Light themes: re-tint the bits that were designed for dark backgrounds ===== */

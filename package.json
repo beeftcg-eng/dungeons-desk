@@ -11,7 +11,7 @@
     "dist:linux": "electron-builder --linux",
     "dist:win": "electron-builder --win",
     "release": "node scripts/release.js",
-    "test": "node scripts/test-charsheet.js && node scripts/test-pdfchar.js && node scripts/test-server.js"
+    "test": "node scripts/test-charsheet.js && node scripts/test-pdfchar.js && node scripts/test-bookimport.js && node scripts/test-server.js"
   },
   "author": {
     "name": "beeftcg-eng",
@@ -21,7 +21,8 @@
   "type": "commonjs",
   "devDependencies": {
     "electron": "^44.7.0",
-    "electron-builder": "^26.15.3"
+    "electron-builder": "^26.15.3",
+    "pdfjs-dist": "^3.11.174"
   },
   "dependencies": {
     "electron-updater": "^6.8.9",

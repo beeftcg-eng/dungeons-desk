@@ -58,7 +58,12 @@ window.Settings = (() => {
           h('table.party-table', h('thead', h('tr', ['Character', 'Player', 'Class', 'Level', 'Init', 'AC', 'Max HP', 'Sheet', 'Token', ''].map(t => h('th', t)))), h('tbody', party.map(row))),
           h('div.row',
             h('button', { onclick: () => { party.push({ name: '', player: '', cls: '', level: 1, initBonus: 0, ac: '', hp: '' }); Store.save(); draw(); } }, '+ Add character'),
-            h('button', { title: 'A .ddchar.json file from the Dungeons Desk character sheet, or a character sheet PDF (D&D Beyond, the official fillable sheet, or printed from Dungeons Desk)', onclick: () => Sheets.importNew().then(ok => ok && draw()) }, '⇩ Add from a file or PDF'))),
+            h('button', { title: 'A .ddchar.json file from the Dungeons Desk character sheet, or a character sheet PDF (D&D Beyond, the official fillable sheet, or printed from Dungeons Desk)', onclick: () => Sheets.importNew().then(ok => ok && draw()) }, '⇩ Add from a file or PDF')),
+          h('label.chk', { style: 'margin-top:10px' }, h('input', { type: 'checkbox', checked: !!(Store.get().playerView || {}).allHomebrew, onchange: (e) => {
+            (Store.get().playerView = Store.get().playerView || {}).allHomebrew = e.target.checked; Store.save(); publishToPlayers();
+            toast(e.target.checked ? 'Players now get all your homebrew spells and items' : 'Players now get only the homebrew you share');
+          } }), ' ★ Players get all my homebrew spells and magic items'),
+          h('p.dim.small', 'They show up, marked ★, when players search for spells and gear on their character sheets. Off: only notes shared with 👥 Share. Notes shared with particular players stay just theirs, and secret boxes are always left out.')),
         h('div.card',
           h('h3', '🗺 Campaign'),
           dm.isWeb ? h('p', 'Campaign: ', h('b', vault), '. On the phone app, notes, handouts, tokens and everything else are saved on this device. Export a campaign file to move it to or from the desktop app.')

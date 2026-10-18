@@ -2,6 +2,7 @@
 //  • Paste text: copy a stat block / spell / item from D&D Beyond, a PDF or a web page and paste it.
 //  • Open5e: search the free, open-licensed Open5e library (SRD, Tome of Beasts, Deep Magic, …).
 //  • File: JSON in Open5e or 5e-database format.
+//  • Book PDF: a book the DM owns (renderer/js/book-import.js finds the entries; they're saved only in this campaign).
 window.Importer = (() => {
   const { h, toast, esc, cap } = U;
   const ABIL = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
@@ -218,6 +219,7 @@ window.Importer = (() => {
     tab('📋 Paste text', pasteTab).click();
     tab('🌐 Open5e library', open5eTab);
     tab('📁 JSON file', fileTab);
+    tab('📕 Book PDF', bookTab);
 
     function pasteTab() {
       const ta = h('textarea.imp-text', { rows: 16, spellcheck: 'false', placeholder: 'Paste a monster stat block, a spell or a magic item here.\n\nFrom D&D Beyond: open the monster/spell/item page, select everything from the name down to the end of the block, copy (Ctrl+C) and paste here (Ctrl+V).\nWorks with PDFs and most websites too.' });
@@ -271,6 +273,94 @@ window.Importer = (() => {
       q.addEventListener('keydown', (e) => e.key === 'Enter' && search());
       body.append(h('div.row', kind, doc, q, h('button.primary', { onclick: search }, '🔍 Search')), h('div.imp-o5', list, out));
       setTimeout(() => q.focus(), 30);
+    }
+
+    // A book PDF the DM owns: every monster, spell and magic item found in it, to tick and save into this campaign.
+    function bookTab() {
+      const file = h('input', { type: 'file', accept: '.pdf,application/pdf', style: 'display:none' });
+      body.append(file, h('div.imp-book-intro',
+        h('p', 'Pick a PDF of a book you own, like a Monster Manual or a Dungeon Master\'s Guide. The app finds the monsters, spells and magic items in it, and you choose which ones to save as homebrew in this campaign.'),
+        h('p.dim.small', 'The book stays on this device: nothing is uploaded, and what you save lives only in this campaign\'s notes. Players see an entry only if you share it with them.'),
+        h('p.dim.small', 'Scanned books have rough text. Entries that look wrong get a ⚠: check them against the page shown, or fix them with “Edit first”.'),
+        h('button.primary', { onclick: () => file.click() }, '📕 Choose a PDF')));
+      file.addEventListener('change', () => { if (file.files[0]) readBook(file.files[0]); });
+    }
+    async function readBook(f) {
+      const source = f.name.replace(/\.pdf$/i, '').trim() || 'Book';
+      let stop = false;
+      const bar = h('progress', { max: 1, value: 0 }), label = h('span.dim', 'Opening the PDF…');
+      body.innerHTML = '';
+      body.append(h('div.imp-book-progress', h('b', `📕 ${source}`), bar, label, h('button', { onclick: () => { stop = true; } }, 'Stop')));
+      let lines;
+      try {
+        lines = await BookImport.readLines(f, (n, total) => { bar.max = total; bar.value = n; label.textContent = `Reading page ${n} of ${total}…`; }, () => stop || !document.body.contains(body));
+      } catch (e) {
+        body.innerHTML = ''; body.append(h('p', 'That PDF couldn\'t be read. ', h('span.dim', e.message || String(e)))); return;
+      }
+      if (!document.body.contains(body)) return;
+      label.textContent = 'Finding monsters, spells and items…';
+      await new Promise(r => setTimeout(r, 30));
+      const hb = Homebrew.list(), have = new Set([...hb.monsters, ...hb.spells, ...hb.items].map(x => x.name.toLowerCase()));
+      const dict = { monster: SRDREF.monsters.map(m => m.name), spell: SRDREF.spells.map(m => m.name), item: [...new Set([...SRDREF.items.map(m => m.name), ...CHARDATA.magicItems.map(m => m.name)])] };
+      const entries = BookImport.findEntries(lines, dict).map((e, i) => {
+        const obj = e.kind === 'monster' ? parseMonster(e.text) : e.kind === 'spell' ? parseSpell(e.text) : parseItem(e.text);
+        obj.name = e.name;
+        const warn = [...e.warn.map(w => w === 'name' ? 'name may be misread' : w), ...(e.kind === 'monster' ? BookImport.checkMonster(obj, e.text) : [])];
+        const dup = have.has(e.name.toLowerCase());
+        return { ...e, i, obj, warn, dup, pick: !dup };
+      });
+      showBook(source, entries, stop);
+    }
+    function showBook(source, entries, stopped) {
+      body.innerHTML = '';
+      if (!entries.length) { body.append(h('p', 'No monsters, spells or magic items found in this PDF.'), h('p.dim', 'A PDF that is only pictures of pages (no text) can\'t be read. Try pasting entries in the 📋 Paste text tab instead.')); return; }
+      const KINDS = { monster: '🐉 Monster', spell: '✨ Spell', item: '💎 Item' };
+      const count = (k) => entries.filter(e => e.kind === k).length;
+      const kindSel = h('select', h('option', { value: '' }, `Everything (${entries.length})`), ['monster', 'spell', 'item'].filter(count).map(k => h('option', { value: k }, `${KINDS[k]}s (${count(k)})`)));
+      const q = h('input', { placeholder: 'Filter by name…' }), cleanOnly = h('input', { type: 'checkbox' });
+      const list = h('div.imp-results'), out = h('div.imp-preview'), go = h('button.primary');
+      let current = null;
+      const shown = () => entries.filter(e => (!kindSel.value || e.kind === kindSel.value) && (!cleanOnly.checked || !e.warn.length) && (!q.value.trim() || e.name.toLowerCase().includes(q.value.trim().toLowerCase())));
+      const sync = () => { const n = entries.filter(e => e.pick).length; go.textContent = `📥 Save ${n} to this campaign`; go.disabled = !n; };
+      const row = (e) => h('div.ref-item.imp-book-row' + (current === e ? '.active' : ''), { onclick: (ev) => { if (ev.target.type === 'checkbox') return; current = e; draw(); show(e); } },
+        h('input', { type: 'checkbox', checked: e.pick, onchange: (ev) => { e.pick = ev.target.checked; sync(); } }),
+        h('div.grow', h('div', e.name, e.warn.length ? h('span.imp-warn', { title: e.warn.join(', ') }, ' ⚠') : null),
+          h('div.dim.small', [KINDS[e.kind], e.kind === 'monster' ? `CR ${e.obj.cr}` : e.kind === 'item' ? e.obj.rarity : e.obj.level ? `Level ${e.obj.level}` : 'Cantrip', `p. ${e.page}`, e.dup ? 'already in this campaign' : ''].filter(Boolean).join(' · '))));
+      function draw() {
+        const s = shown();
+        list.innerHTML = '';
+        list.append(h('div.row.imp-book-bulk', h('span.dim.small.grow', `${s.length} shown`), h('button.small', { onclick: () => { s.forEach(e => (e.pick = true)); draw(); sync(); } }, 'Tick all'), h('button.small', { onclick: () => { s.forEach(e => (e.pick = false)); draw(); sync(); } }, 'Untick all')));
+        s.forEach(e => list.append(row(e)));
+      }
+      function show(e) {
+        out.innerHTML = '';
+        const name = h('input', { value: e.name, oninput: () => { e.name = e.obj.name = name.value; } , onchange: () => draw() });
+        out.append(h('div.row', h('label.field.grow', h('span', `Name · page ${e.page} of ${source}`), name)),
+          e.warn.length ? h('div.callout.callout-warning', h('div.callout-title', '⚠ Check this one'), h('p', `Looks wrong: ${e.warn.join(', ')}. Compare it with page ${e.page}, and use “Edit first” to fix it.`)) : null,
+          saveButtons(e.kind, e.obj, source, () => { e.pick = false; e.dup = true; draw(); sync(); }),
+          preview(e.kind, e.obj),
+          h('details.imp-book-raw', h('summary.dim.small', 'The text as it came out of the PDF'), h('pre', e.text)));
+      }
+      go.addEventListener('click', async () => {
+        const chosen = entries.filter(e => e.pick);
+        go.disabled = true;
+        for (let i = 0; i < chosen.length; i++) {
+          go.textContent = `Saving ${i + 1} of ${chosen.length}…`;
+          await Homebrew.save(chosen[i].kind, { ...chosen[i].obj, source }, { open: false, source });
+          chosen[i].pick = false; chosen[i].dup = true;
+        }
+        await Notes.refresh();
+        toast(`Saved ${chosen.length} entr${chosen.length === 1 ? 'y' : 'ies'} from ${source} into Homebrew`);
+        draw(); sync();
+      });
+      [kindSel, cleanOnly].forEach(x => x.addEventListener('change', draw));
+      q.addEventListener('input', U.debounce(draw, 150));
+      const warned = entries.filter(e => e.warn.length).length;
+      body.append(h('div.row', h('b', `📕 ${source}`), h('span.dim', `${['monster', 'spell', 'item'].filter(count).map(k => `${count(k)} ${k === 'monster' ? 'monsters' : k === 'spell' ? 'spells' : 'magic items'}`).join(', ')} found${stopped ? ' (stopped early)' : ''}${warned ? ` · ${warned} with ⚠` : ''}`)),
+        h('div.row', kindSel, q, h('label.chk', cleanOnly, ' Hide ones with ⚠'), h('span.grow'), go),
+        h('div.imp-o5', list, out));
+      out.append(h('p.dim', 'Click an entry to check it before saving. Everything ticked is saved with the button above.'));
+      draw(); sync();
     }
 
     function fileTab() {

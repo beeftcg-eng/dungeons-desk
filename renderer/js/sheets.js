@@ -82,9 +82,12 @@ window.Sheets = (() => {
   const playerText = (t) => String(t || '').replace(/%%[\s\S]*?%%/g, '').replace(/^> ?\[!secret\][^\n]*\n(>.*\n?)*/gim, '').trim();
   function playerHomebrew() {
     if (!window.Homebrew || !window.Notes) return hbCache;
-    const sig = Notes.list().map(n => n.path + n.mtime).join('|');
+    // Settings → Party → "Players get all my homebrew": every spell and item goes to everyone, except notes whose
+    // share: names particular players, which keep that list.
+    const all = !!(Store.get().playerView || {}).allHomebrew;
+    const sig = all + '|' + Notes.list().map(n => n.path + n.mtime).join('|');
     if (sig === hbSig) return hbCache;
-    const hb = Homebrew.list(), cache = Notes.notesCache(), to = (path) => Notes.shareOf(cache.get(path));
+    const hb = Homebrew.list(), cache = Notes.notesCache(), to = (path) => Notes.shareOf(cache.get(path)) || (all ? 'all' : null);
     hbCache = {
       spells: hb.spells.filter(x => to(x.path)).map(x => ({ name: x.name, level: x.level, school: x.school, time: x.time, range: x.range, comp: x.comp, dur: x.dur,
         conc: x.conc || undefined, ritual: x.ritual || undefined, classes: x.classes, desc: playerText(x.desc), homebrew: true, to: to(x.path) })),

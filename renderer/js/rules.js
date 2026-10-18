@@ -35,7 +35,7 @@ window.Rules = (() => {
     els.detail = h('div.ref-detail');
     root.append(h('div.page.page-flush', els.layout = h('div.ref-layout',
       h('aside.ref-side', h('div.ref-head',
-        h('div.row', h('h2', '📖 Rules'), h('span.grow'), h('button.small.primary', { onclick: Homebrew.newDialog, title: 'Create your own monster, spell or item' }, '+ Homebrew'), h('button.small', { onclick: () => Importer.open(), title: 'Paste from D&D Beyond / PDFs, search Open5e, or import a file' }, '📥 Import')),
+        h('div.row', h('h2', '📖 Rules'), h('span.grow'), h('button.small.primary', { onclick: Homebrew.newDialog, title: 'Create your own monster, spell or item' }, '+ Homebrew'), h('button.small', { onclick: () => Importer.open(), title: 'Paste from D&D Beyond / PDFs, search Open5e, import a file, or read a book PDF you own' }, '📥 Import')),
         els.q, els.sources, els.cats, els.filters), els.list,
         h('p.ref-attr', R.attribution)),
       els.detail)));
