@@ -110,6 +110,10 @@
   .saved { font-size: 12px; color: var(--dim); text-align: right; }
   .nhint { color: var(--dim); font-size: 13px; margin: 4px 0 10px; }
   .nbtns { display: flex; gap: 8px; flex-wrap: wrap; }
+  .acct { display: grid; gap: 8px; margin: 8px 0; } .acct input { font-size: 16px; padding: 11px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--text); }
+  .recap { border-color: var(--accent); } .recap h3 { font-family: 'Cinzel', serif; color: var(--accent); margin: 0 0 8px; font-size: 19px; }
+  .recap-body { line-height: 1.55; } .recap-body p { margin: 0 0 8px; }
+  .viewer .recap { max-width: 560px; margin: 0 auto; }
   .rollpop { position: fixed; left: 12px; right: 12px; top: calc(12px + env(safe-area-inset-top)); z-index: 75; max-width: 420px; margin: 0 auto; background: var(--panel2); border: 2px solid var(--accent); border-radius: 14px; padding: 12px 16px; text-align: center; box-shadow: 0 14px 40px rgba(0,0,0,.6); transition: opacity .4s; }
   .rollpop.out { opacity: 0; }
   /* First-time tour */
@@ -160,7 +164,7 @@
     <section class="pane on" id="turns"></section>
     <section class="pane" id="handouts"></section>
     <section class="pane" id="wiki"></section>
-    <section class="pane" id="notes"></section>
+    <section class="pane" id="notes"><div id="recapbox"></div><div id="notesbox"></div><div id="notesacct"></div></section>
     <section class="pane" id="char"></section>
   </main>
 </div>
@@ -278,8 +282,41 @@
     $('#app').hidden = false; $('#join').hidden = true;
     $('#me').hidden = display; $('#me').textContent = '👤 ' + (me || '');
     $('#date').textContent = data.calendar ? '🗓 ' + data.calendar : '';
-    renderTurns(); renderHandouts(); renderWiki(); renderMap(); renderMe();
+    renderTurns(); renderHandouts(); renderWiki(); renderMap(); renderMe(); renderRecap();
   }
+
+  // ---------- "Last time…": the DM's recap of the last session (their Session screen) ----------
+  // It pops up once for each new version, and stays at the top of the Notes tab.
+  const recapHtml = (r) => `<div class="card recap"><h3>📜 Last time…</h3><div class="recap-body">${r.html}</div>
+    <div class="nbtns"><button class="btn" data-recap="copy">📝 Copy into my notes</button></div>
+    <div class="nhint">From your DM · ${esc(new Date(r.at).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' }))}</div></div>`;
+  function renderRecap() {
+    const r = data.recap;
+    $('#recapbox').innerHTML = r ? recapHtml(r) : '';
+    if (!r || display || !me || store.get('dm.recap.seen') === String(r.at)) return;
+    // Not over the first-time tour or a handout; it shows on the next update instead.
+    if (tourStep >= 0 || !store.get('dm.tour.done') || document.querySelector('.viewer')) return;
+    store.set('dm.recap.seen', String(r.at));
+    const v = document.createElement('div');
+    v.className = 'viewer';
+    v.innerHTML = `<button class="close">Close ✕</button>${recapHtml(r)}<div style="text-align:center;margin-top:14px"><button class="btn primary got">Got it</button></div>`;
+    v.querySelectorAll('.close, .got').forEach(b => b.addEventListener('click', () => v.remove()));
+    document.body.append(v);
+    buzz(120);
+  }
+  // Into the player's own notes as a section of its own (once the notes have loaded).
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('[data-recap="copy"]') || !data || !data.recap) return;
+    const r = data.recap, title = `Recap · ${new Date(r.at).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}`;
+    openNotes();
+    let tries = 0;
+    const go = () => {
+      // Notes are plain text: no **bold** or _italic_ markers.
+      if (notesUi && notesUi.add(title, r.text.replace(/(\*\*|__)(.+?)\1/g, '$2').replace(/(^|[^*\w])[*_]([^*_\n]+)[*_](?![*\w])/g, '$1$2'))) { e.target.closest('.viewer')?.remove(); tab('notes'); return toast('Copied into your notes'); }
+      if (++tries < 20) setTimeout(go, 300); else toast('Your notes haven\'t loaded yet. Try again in a moment.');
+    };
+    go();
+  });
 
   // ---------- Wiki ----------
   let wikiOpen = null, wikiQuery = '';
@@ -567,8 +604,10 @@
   let notesUi = null;
   function openNotes() {
     if (notesUi || !me) return;
-    notesUi = SessionNotes.mount($('#notes'), { load: () => net.notesGet(), save: (t) => net.notesSet(t), where: net.notesWhere,
+    notesUi = SessionNotes.mount($('#notesbox'), { load: () => net.notesGet(), save: (t) => net.notesSet(t), where: () => net.notesWhere,
       fileName: () => `${(me || 'My').replace(/[\\/:*?"<>|]/g, '')} notes.md` });
+    // At an online table, signing in keeps them in the player's account too (web/table-net.js).
+    if (net.notesAccount) net.notesAccount($('#notesacct'), () => notesUi && notesUi.reload());
   }
 
   function renderTurns() {
@@ -628,7 +667,7 @@
     { tab: 'handouts', icon: '✉', title: () => 'Handouts', body: 'Letters, clues, wanted posters and secrets from the DM pop up here, and some are just for you. A red badge means something new.' },
     { tab: 'wiki', icon: '📚', title: () => 'Wiki', body: 'People, places and lore the DM has shared with the party. Tap a highlighted name to jump to that page.' },
     { tab: 'map', icon: '🗺', title: () => 'Map', body: 'When the DM shows a map:<ul><li><b>✋ Move</b>: drag your own token. Fog clears as you explore.</li><li><b>📏 Measure</b>: drag to measure (1 square = 5 ft).</li><li><b>📍 Ping</b>: tap to point something out.</li></ul>Pinch to zoom, drag to look around.' },
-    { tab: 'notes', icon: '📝', title: () => 'Session notes', body: 'Your private notebook. Tap <b>＋ Start today\'s notes</b> each session and jot down names, clues and loot. Older sessions fold up underneath, and <b>⬇ Save as a file</b> keeps a copy.' },
+    { tab: 'notes', icon: '📝', title: () => 'Session notes', body: 'Your private notebook. Tap <b>＋ Start today\'s notes</b> each session and jot down names, clues and loot. Older sessions fold up underneath, and <b>⬇ Save as a file</b> keeps a copy. When the DM writes a <b>📜 Last time…</b> recap, it\'s at the top here too.' },
     { tab: 'char', icon: '📜', title: () => 'Your character sheet', body: 'Your whole character: stats, attacks, spells, gear and features. New character? <b>✨ Make my character step by step</b> walks you through every choice, or tap <b>✏ Edit</b> and fill it in yourself.<ul><li><b>Tap a save, skill, attack or spell</b> to roll it. The DM sees the result.</li><li><b>📤 Show the DM</b> sends them a spell, feature or item.</li></ul>Under <b>🪙 Token &amp; file</b>: your token picture, <b>🖨 Print</b> for a paper copy or PDF of your sheet, and <b>⇩ Import my sheet</b> for a character file or a character sheet PDF (from D&amp;D Beyond, say). Not in the party yet? <b>Send my character to the DM</b> and they add you with one tap.' },
     { tab: 'turns', icon: '🎲', title: () => 'You\'re all set!', body: 'Tip: add this page to your home screen (browser menu → "Add to Home screen") so it\'s one tap away next session. You can replay this tour from the 👤 Me tab.' },
   ];

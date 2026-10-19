@@ -143,6 +143,7 @@ window.Store = (() => {
     encounter: { items: [], size: null, level: null },
     maps: [],
     calendar: null,
+    recap: { draft: '', sent: null },      // "Last time…" for players (Session view): what's being written, and what phones show
   });
   let state = defaults();
   const listeners = new Set();
@@ -208,6 +209,7 @@ window.publishToPlayers = U.debounce(() => {
     calendar: window.Timeline ? Timeline.playerDate() : null,
     feed: window.Sheets ? Sheets.playerFeed() : [],
     homebrew: window.Sheets ? Sheets.playerHomebrew() : { spells: [], items: [] },
+    recap: window.Session ? Session.playerRecap() : null,
     ...(window.Notes ? Notes.playerWiki() : {}),
   };
   window.dm.server.publish(pub);

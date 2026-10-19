@@ -1,4 +1,4 @@
-# Builds the phone app (scripts/build-web.js) and publishes it to GitHub Pages on every push to main:
+# Builds the phone app (scripts/build-web.js), smoke-tests it, and publishes it to GitHub Pages on every push to main:
 # https://beeftcg-eng.github.io/dungeons-desk/ (the DM app at dm/, the standalone character sheet at sheet/).
 # Pages must be set to "GitHub Actions" in the repository's Settings → Pages.
 name: Deploy phone app
@@ -32,8 +32,30 @@ jobs:
       - uses: actions/upload-pages-artifact@v5
         with: { path: dist-web }
 
+  # Opens the built phone app in Electron (scripts/smoke-web.js): every DM view, the sheet app and the players' page.
+  # Any console error or missing file fails it, and then nothing is deployed. Screenshots are kept when it fails.
+  smoke:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: sudo apt-get update -q && sudo apt-get install -yq xvfb
+      - run: node scripts/build-web.js
+      - name: Smoke test
+        run: |
+          for P in dm sheet play; do
+            mkdir -p shots/$P
+            echo "== $P"
+            SHOTS=shots/$P PAGE=$P CHECK=1 timeout 240 xvfb-run -a node_modules/electron/dist/electron --no-sandbox --disable-gpu scripts/smoke-web.js
+          done
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with: { name: smoke-shots, path: shots }
+
   deploy:
-    needs: build
+    needs: [build, smoke]
     runs-on: ubuntu-24.04
     environment:
       name: github-pages

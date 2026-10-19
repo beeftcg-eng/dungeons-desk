@@ -84,8 +84,12 @@ test('viewFor: phones see only handouts, wiki pages, cards and feed meant for th
     wiki: [{ title: 'Town', to: 'all' }, { title: 'Elara secret', to: ['elara'] }],
     partyCards: [{ name: 'Thorin', hp: 31 }, { name: 'Elara', hp: 27 }],
     feed: [{ player: 'Thorin', text: 'rolled 17' }, { player: 'Elara', text: 'rolled 3' }],
+    homebrew: { feats: [{ name: 'Bog Stride', to: 'all' }, { name: 'Elara only', to: ['Elara'] }] },
+    recap: { text: 'Last time…', html: '<p>Last time…</p>', at: 1 },
   });
   const thorin = await firstEvent('player=thorin');
+  assert.deepStrictEqual(thorin.homebrew.feats.map(f => f.name), ['Bog Stride'], 'homebrew feats filtered like spells');
+  assert.strictEqual(thorin.recap.text, 'Last time…');
   assert.deepStrictEqual(thorin.handouts.map(h => h.id), ['a', 't']);
   assert.deepStrictEqual(thorin.wiki.map(w => w.title), ['Town']);
   assert.strictEqual(thorin.card.name, 'Thorin');
@@ -94,6 +98,7 @@ test('viewFor: phones see only handouts, wiki pages, cards and feed meant for th
   assert.deepStrictEqual(tv.handouts.map(h => h.id), ['a'], 'the TV display only gets "all" handouts');
   assert.deepStrictEqual(tv.feed, []);
   assert.strictEqual(tv.card, null);
+  assert.strictEqual(tv.recap, null, 'the recap is for phones');
 });
 
 test('move: needs a player and numeric x/y, then goes to the DM app', async () => {

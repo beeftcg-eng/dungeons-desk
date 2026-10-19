@@ -140,6 +140,23 @@ test('Character files round-trip and reject other JSON', () => {
   assert.strictEqual(CS.fileName('Thorin: the "Bold"'), 'Thorin the Bold.ddchar.json');
 });
 
+test('Levelling up: Fighter 3 → 4 with an ability increase, Fighter 2 → 3 choosing a subclass, Wizard 5 → 6 with spells', () => {
+  const m = JSON.parse(JSON.stringify(thorin)), P = CS.levelPlan(m, 0);
+  assert.deepStrictEqual([P.newLvl, P.avg, P.asi, P.needSub], [4, 8, true, false], 'd10 average 6 + Con 2');
+  const r = CS.levelUp(m, P, { asi: { mode: 'two', a: 'str' } });
+  assert.deepStrictEqual([m.level, m.sheet.abilities.str, r.gain, r.asiText, d(m).maxHp], [4, 18, 8, '+2 Strength', 40], 'plus 1 for Dwarven Toughness');
+  const rolled = JSON.parse(JSON.stringify(thorin)), r2 = CS.levelUp(rolled, CS.levelPlan(rolled, 0), { rolled: 3, asi: { mode: 'feat', feat: 'alert' } });
+  assert.deepStrictEqual([rolled.sheet.auto.hp, rolled.hp, r2.asiText, rolled.sheet.feats[0].name], [false, 34, 'Feat: Alert', 'Alert'], 'a roll makes max HP typed');
+  const young = pc({ cls: 'Fighter', level: 2 }, {}), P3 = CS.levelPlan(young, 0);
+  assert.ok(P3.needSub);
+  const r3 = CS.levelUp(young, P3, { subclass: 'champion' });
+  assert.deepStrictEqual([young.sheet.subclass, r3.features.includes('Improved Critical')], ['Champion', true]);
+  const w = JSON.parse(JSON.stringify(elara)), PW = CS.levelPlan(w, 0);
+  const r4 = CS.levelUp(w, PW, { spells: ['Counterspell', 'Fireball', 'Nonsense'] });
+  assert.deepStrictEqual(r4.spells, ['Counterspell'], 'known spells and unknown names are skipped');
+  assert.strictEqual(CS.levelPlan(pc({ cls: 'Fighter', level: 20 }, {}), 0).blocked, 'Already level 20');
+});
+
 // Share links use CompressionStream, which is async; checked after the rest.
 const linkCheck = (async () => {
   const m = CS.applyAuto(CS.clean(thorin));

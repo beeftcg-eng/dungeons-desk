@@ -148,6 +148,12 @@ window.BookImport = (() => {
   const HP_RE = /^(?:HP|H[a-z]{1,2}\s+P[a-z]{4,6})\b/;
   const ITEM_RE = /^(armor|weapon|wondrous\s*item|potion|ring|rod|scroll|staff|wand|shield|ammunition)\b[^,]{0,70},\s*(common|uncommon|rare|very\s*rare|legendary|artifact|rarity\s*varies)\b/i;
   const SPELL_RE = /^(level\s+\d\s+[a-z]+|[a-z]+\s+cantrip|\d(st|nd|rd|th)[- ]level\s+[a-z]+)/i;
+  // 2024 layouts: "General Feat (Prerequisite: …)" under a feat's name, "Ability Scores: …" under a background's,
+  // "Barbarian Subclass" under a subclass's (its features are "Level 3: Name" lines).
+  const FEAT_RE = /^(origin|general|fighting\s*style|epic\s*boon)\s+feat\b/i;
+  const BG_RE = /^ability\s*scores?\s*[:;]/i, BG_PROP = /^(ability\s*scores?|feat|skill\s*proficienc\w*|tool\s*proficienc\w*|equipment)\s*[:;]/i;
+  const SUB_RE = /^(barbarian|bard|cleric|druid|fighter|monk|paladin|ranger|rogue|sorcerer|warlock|wizard)\s+subclass\b/i;
+  const LEVEL_RE = /^lev\w{0,2}\s*(\d{1,2})\s*[:.;]\s*/i;
   const short = (l) => l && l.t.length <= 48 && !/[.;:]$/.test(l.t);
 
   // Abilities, rewritten so Importer.parseMonster reads them: 2024 tables ("Srn 15 +2 +2", rows Str Dex Con / Int Wis Cha)
@@ -170,15 +176,16 @@ window.BookImport = (() => {
   }
 
   // Lines from where an entry starts to just before the next one, a big heading, or a column where it clearly stopped.
-  function takeBlock(all, from, isStart, max = 90) {
+  function takeBlock(all, from, isStart, max = 90, pages = 1) {
     const out = [all[from]];
     const bodyH = all[from].h;
     for (let j = from + 1; j < all.length && out.length < max; j++) {
       const l = all[j], prev = all[j - 1];
       if (isStart(j)) break;
       if (l.h >= Math.max(17, bodyH * 1.7) && l.t.length < 40) break;                       // a title
-      if ((l.page !== prev.page || l.col !== prev.col) && /[.)]$/.test(prev.t) && !heading(l.t) && !/^[A-Z][\w' -]{1,40}\.\s/.test(l.t)) break; // the block ended with its column
-      if (l.page > all[from].page + 1) break;
+      // The block ended with its column (a subclass goes on: its next feature starts the next column).
+      if ((l.page !== prev.page || l.col !== prev.col) && /[.)]$/.test(prev.t) && !heading(l.t) && !/^[A-Z][\w' -]{1,40}\.\s/.test(l.t) && !(pages > 1 && LEVEL_RE.test(l.t))) break;
+      if (l.page > all[from].page + pages) break;
       out.push(l);
     }
     return out;
@@ -219,6 +226,13 @@ window.BookImport = (() => {
     }).join(' ');
     return { name: title(name), ok };
   }
+  // The dictionary names closest to a misread one, for the Book PDF tab to offer ("Blacx Puddmg" → Black Pudding).
+  function suggest(raw, dict, n = 3) {
+    const lc = String(raw || '').toLowerCase().replace(/[^a-z0-9 ]/g, '').trim();
+    if (!lc) return [];
+    return dict.map(d => ({ d, dist: ocrDist(lc, d.toLowerCase()) / Math.max(lc.length, d.length) })).filter(x => x.dist <= 0.5 && x.d.toLowerCase() !== lc)
+      .sort((a, b) => a.dist - b.dist).slice(0, n).map(x => x.d);
+  }
   function wordsNear(all, i) {
     const m = new Map(), page = all[i].page;
     for (let j = Math.max(0, i - 150); j < Math.min(all.length, i + 150); j++) {
@@ -231,18 +245,25 @@ window.BookImport = (() => {
     return m;
   }
 
-  // all: lines of the whole book (pageLines for every page). dict: { monster: [names], spell: [...], item: [...] }.
-  // → [{ kind, name, page, text, warn: [] }], text ready for Importer.parseMonster / parseSpell / parseItem.
+  // all: lines of the whole book (pageLines for every page). dict: { monster: [names], spell: [...], item: [...], feat, background, subclass }.
+  // → [{ kind, name, page, text, warn: [] }], text ready for Importer's parsers (parseMonster, parseSpell, parseItem,
+  // parseFeat, parseBackground, parseSubclass).
   function findEntries(all, dict = {}) {
     const lines = all.map(l => ({ ...l, t: tidy(fixNumbers(unspace(l.t))) })).filter(l => l.t.length > 1 || /\d/.test(l.t));
     const isMonster = (j) => AC_RE.test(lines[j].t) && (lines.slice(j + 1, j + 4).some(l => HP_RE.test(l.t)) || /nitiative/i.test(lines[j].t)) && j >= 2 && short(lines[j - 2]) && /,/.test(lines[j - 1].t) && lines[j - 1].t.length < 70;
     const isItem = (j) => ITEM_RE.test(lines[j].t) && j >= 1 && short(lines[j - 1]);
     const isSpell = (j) => SPELL_RE.test(lines[j].t) && lines[j].t.length < 70 && j >= 1 && short(lines[j - 1]) && lines.slice(j + 1, j + 4).some(l => /^casting time/i.test(l.t));
+    const isFeat = (j) => FEAT_RE.test(lines[j].t) && lines[j].t.length < 90 && j >= 1 && short(lines[j - 1]);
+    const isBackground = (j) => BG_RE.test(lines[j].t) && j >= 1 && short(lines[j - 1]) && lines.slice(j + 1, j + 5).some(l => BG_PROP.test(l.t));
+    const isSubclass = (j) => SUB_RE.test(lines[j].t) && lines[j].t.length < 70 && j >= 1 && short(lines[j - 1]) && lines.slice(j + 1, j + 40).some(l => LEVEL_RE.test(l.t));
     const starts = [];
     lines.forEach((_, j) => {
       if (isMonster(j)) starts.push({ kind: 'monster', at: j - 2 });
       else if (isItem(j)) starts.push({ kind: 'item', at: j - 1 });
       else if (isSpell(j)) starts.push({ kind: 'spell', at: j - 1 });
+      else if (isFeat(j)) starts.push({ kind: 'feat', at: j - 1 });
+      else if (isBackground(j)) starts.push({ kind: 'background', at: j - 1 });
+      else if (isSubclass(j)) starts.push({ kind: 'subclass', at: j - 1 });
     });
     // A name in capitals that wraps onto two lines ("AMULET OF PROOF AGAINST DETECTION" / "AND LOCATION").
     const caps = (l) => l && /[A-Z]{2}/.test(l.t) && !/[a-z]{2}/.test(l.t.replace(/\b(of|the|and|or|a)\b/g, ''));
@@ -253,7 +274,7 @@ window.BookImport = (() => {
     const startSet = new Set(starts.map(s => s.at));
     const dictWords = Object.fromEntries(Object.entries(dict).map(([k, names]) => [k, new Set(names.flatMap(n => n.toLowerCase().match(/[a-z]{3,}/g) || []))]));
     return starts.map(s => {
-      const block = takeBlock(lines, s.at, (j) => startSet.has(j)).map(l => l.t);
+      const block = takeBlock(lines, s.at, (j) => startSet.has(j), s.kind === 'subclass' ? 400 : 90, s.kind === 'subclass' ? 3 : 1).map(l => l.t);
       if (s.two) block.splice(0, 2, block[0] + ' ' + block[1]);
       const warn = [];
       const nm = fixName(block[0], dict[s.kind] || [], wordsNear(lines, s.at), dictWords[s.kind]);
@@ -266,6 +287,27 @@ window.BookImport = (() => {
         const firstEntry = body.findIndex((t, i) => i > 2 && (ENTRY.test(t) || heading(t)));
         const props = firstEntry < 0 ? body : body.slice(0, firstEntry), rest = firstEntry < 0 ? [] : body.slice(firstEntry);
         body = [...props, ...joinWrapped(rest, (t, isPrev) => !isPrev && (ENTRY.test(t) || SECTIONS.includes(t)) || isPrev && SECTIONS.includes(t)).map(fixText)];
+      } else if (s.kind === 'feat') {
+        // "General Feat (Prerequisite: Level 4+, Strength or" / "Dexterity 13+)" is one line; then one paragraph per label.
+        while (body.length > 1 && (body[0].match(/\(/g) || []).length > (body[0].match(/\)/g) || []).length) body.splice(0, 2, body[0] + ' ' + body[1]);
+        body = [body[0].replace(/\s*;\s*/g, ': '), ...joinWrapped(body.slice(1), (t, isPrev) => !isPrev && /^[A-Z][\w'’ ]{1,30}\.\s/.test(t)).map(fixText)];
+      } else if (s.kind === 'background') {
+        // Each "Label: value" is one line (Equipment runs on to its GP); after them, the description.
+        const props = [];
+        let k = 0;
+        for (; k < body.length; k++) {
+          const t = body[k].replace(/^(ability\s*scores?|feat|skill\s*proficienc\w*|tool\s*proficienc\w*|equipment)\s*;\s*/i, '$1: ');
+          if (BG_PROP.test(t)) props.push(t);
+          else if (props.length && !/\bGP\.?$/i.test(props[props.length - 1]) && (/^equipment/i.test(props[props.length - 1]) || /[,(]$|\bor$|\band$/i.test(props[props.length - 1]))) props[props.length - 1] += ' ' + t;
+          else break;
+        }
+        body = [...props, ...joinWrapped(body.slice(k), () => false).map(fixText)];
+      } else if (s.kind === 'subclass') {
+        // "Barbarian Subclass", its tagline, then the features: each "Level N: Name" heading on its own line.
+        const lv = (t) => LEVEL_RE.test(t);
+        body = body.map(t => lv(t) ? t.replace(LEVEL_RE, (m, n) => `Level ${n}: `) : t);
+        const head = body.slice(0, 2).filter((t, i) => i === 0 || (t.length < 80 && !/[.:]$/.test(t) && !lv(t)));
+        body = [...head, ...joinWrapped(body.slice(head.length), (t, isPrev) => lv(t) || !isPrev && /^[A-Z][\w'’ ]{1,30}\.\s/.test(t)).map(fixText)];
       } else {
         // A type line that wraps ("…rare (+2), or" / "very rare (+3)") is one line.
         while (body.length > 1 && /(,|\bor|\band)$/i.test(body[0])) body.splice(0, 2, body[0] + ' ' + body[1]);
@@ -319,5 +361,5 @@ window.BookImport = (() => {
     return all;
   }
 
-  return { pageLines, findEntries, fixNumbers, fixWords, unspace, fixName, heading, checkMonster, readLines, lev };
+  return { pageLines, findEntries, fixNumbers, fixWords, unspace, fixName, suggest, heading, checkMonster, readLines, lev };
 })();

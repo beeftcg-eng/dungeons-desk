@@ -288,7 +288,7 @@ window.CloudSync = (() => {
     try {
       const all = await Cloud.rpc('dmdesk_campaigns_list');
       list.innerHTML = '';
-      const others = all.filter(c => !(linked() && c.id === link.cloudId) && c.id !== Library.CLOUD_ID);
+      const others = all.filter(c => !(linked() && c.id === link.cloudId) && c.id !== Library.CLOUD_ID && c.id !== 'dd-player-notes');  // the library, and players' notes from online tables (web/table-net.js)
       if (!others.length) list.append(h('p.dim.small', linked() ? 'No other campaigns.' : 'Nothing yet.'));
       others.forEach(c => list.append(h('div.row', h('span.grow', h('b', c.name), h('span.dim.small', ` · ${c.notes} note${c.notes === 1 ? '' : 's'}`)),
         h('button.small', { onclick: () => getHere(c) }, '⬇ Get it on this device'))));

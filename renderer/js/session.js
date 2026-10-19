@@ -1,6 +1,7 @@
 // Session: one screen for running the table, made for the phone app but on the desktop rail too.
-// The fight (turns, HP, the current creature's stat block), quick dice, the party at a glance, and notes pinned
-// with 📌 in the note toolbar (Store.get().session.pins). Initiative calls refresh() after every change.
+// The fight (turns, HP, the current creature's stat block), quick dice, the party at a glance, notes pinned
+// with 📌 in the note toolbar (Store.get().session.pins), and the "Last time…" recap players see on their phones
+// (Store.get().recap: the draft, and what was sent). Initiative calls refresh() after every change.
 window.Session = (() => {
   const { h } = U;
   let root = null, els = {};
@@ -23,7 +24,7 @@ window.Session = (() => {
     els.page.innerHTML = '';
     els.page.append(
       h('header.page-head', h('h1', 'Session'), date ? h('span.dim', '📅 ', date) : null),
-      h('div.session-grid', installCard(), fightCard(), diceCard(), partyCard(), pinsCard()));
+      h('div.session-grid', installCard(), fightCard(), recapCard(), diceCard(), partyCard(), pinsCard()));
   }
 
   // On the phone app: how to install it (web/install.js), made once and dropped when dismissed.
@@ -60,6 +61,47 @@ window.Session = (() => {
     if (c.kind === 'lair') return;
     const v = await U.prompt(`${c.name}: ${c.hp ?? '?'}/${c.maxHp ?? '?'} HP`, '', '7 = damage, +7 = heal, =7 = set');
     if (v) Initiative.applyHp(c, v);
+  }
+
+  // ---------- Recap for players ----------
+  // The card is made once and kept, so redraws during a fight never take the text away from someone typing.
+  const recap = () => { const s = Store.get(); s.recap = s.recap || { draft: '', sent: null }; return s.recap; };
+  let recapEl = null;
+  function recapCard() {
+    if (!recapEl) {
+      const ta = h('textarea.session-recap-text', { rows: 5, placeholder: 'Last time, the party reached Murkfin Marsh, bargained with the bog hag and found the stolen bell…',
+        oninput: () => { recap().draft = ta.value.slice(0, 5000); Store.save(); drawRecap(); } });
+      recapEl = h('div.card.session-recap', h('h3', '📜 Last time… (for players)'),
+        h('p.hint', 'A few lines about what happened last session. Phones show it when players open the page, and they can copy it into their notes.'),
+        ta, h('div.row.session-recap-btns'), h('p.dim.small.session-recap-state'));
+    }
+    drawRecap();
+    return recapEl;
+  }
+  function drawRecap() {
+    if (!recapEl) return;
+    const r = recap(), ta = recapEl.querySelector('textarea'), sent = r.sent && r.sent.text;
+    if (document.activeElement !== ta && ta.value !== (r.draft || '')) ta.value = r.draft || '';
+    const changed = !sent || r.sent.text !== (r.draft || '').trim();
+    const btns = recapEl.querySelector('.session-recap-btns');
+    btns.innerHTML = '';
+    btns.append(h('button.primary', { disabled: !(r.draft || '').trim() || !changed, onclick: sendRecap }, sent ? '📣 Send the new version' : '📣 Show to players'),
+      sent ? h('button', { onclick: () => { r.sent = null; Store.save(); publishToPlayers(); drawRecap(); U.toast('Phones no longer show the recap'); } }, 'Stop showing') : null);
+    recapEl.querySelector('.session-recap-state').textContent = sent ? `Phones show the version from ${new Date(r.sent.at).toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}${changed ? '. You\'ve changed it since.' : '.'}` : 'Not shown to players yet.';
+  }
+  function sendRecap() {
+    const r = recap(), text = (r.draft || '').trim();
+    if (!text) return;
+    r.sent = { text, at: Date.now() };
+    Store.save(); publishToPlayers(); drawRecap();
+    U.toast('Recap sent to the players\' phones');
+  }
+  // What phones get: the recap without %% comments %% or secret callouts, as HTML and as text (to copy into notes).
+  function playerRecap() {
+    const r = Store.get().recap, sent = r && r.sent;
+    if (!sent || !sent.text) return null;
+    const text = String(sent.text).replace(/%%[\s\S]*?%%/g, '').replace(/^> ?\[!secret\][^\n]*\n(>.*\n?)*/gim, '').trim();
+    return text ? { text, html: MD.simple(text), at: sent.at } : null;
   }
 
   // ---------- Dice ----------
@@ -110,5 +152,5 @@ window.Session = (() => {
   }
   const isPinned = (path) => pins().includes(path);
 
-  return { mount, onShow: draw, refresh, togglePin, isPinned };
+  return { mount, onShow: draw, refresh, togglePin, isPinned, playerRecap };
 })();

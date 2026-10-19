@@ -14,7 +14,7 @@ Players on the same Wi-Fi scan the QR code on the **⏳ Initiative** page. They 
 | ✉ Handouts | Your letters and clues, sent from **✉ Handouts → Reveal** |
 | 📚 Wiki | Notes you've shared with **👥 Share** |
 | 🗺 Map | The map you're showing. They can **move their own token**, **measure** and **ping**. |
-| 📝 Notes | Private **session notes**: **＋ Start today's notes** adds a section for each session, older ones fold up underneath, and **⬇ Save as a file** downloads them all. On your Wi-Fi they're kept on your computer (in `.dmtools/players/`); at an online table they stay on the phone. |
+| 📝 Notes | Private **session notes**: **＋ Start today's notes** adds a section for each session, older ones fold up underneath, and **⬇ Save as a file** downloads them all. Your **📜 Last time…** recap (from the 🎬 Session screen) is at the top, with **📝 Copy into my notes**. On your Wi-Fi they're kept on your computer (in `.dmtools/players/`). At an online table they stay on the phone, and a player who signs in (the same account as the sheet app, so signing in to either does both) keeps them in their account and gets them on any phone. You can't read them. |
 | 👤 Me | Their **character sheet** (see below). Its **🪙 Token & file** tab has a **token maker** for their character's picture, **🖨 Print or save as PDF** for a regular paper sheet, and the character file buttons |
 
 ## Character sheets 📜
@@ -26,7 +26,7 @@ Each character in **⚙ Settings → Party** has a full character sheet. Players
 - **Gear.** Search the SRD weapons, armor, gear and magic items, or type anything to add your own. **🎒 Take your starting equipment** adds the class and background kit, with packs unpacked into their contents. Equipped armor sets AC, and equipped weapons appear under *Actions*.
 - **Spells.** Search the class spell list, mark spells prepared (●), and tap one to read it, **✨ Cast** it (uses a slot), roll a spell attack or roll its damage.
 - **Rests.** *Actions* has Short Rest and Long Rest buttons, Hit Point Dice and class resource dots.
-- **⬆ Level up** (on *Features*, or in ✏ Edit) walks through it. It shows HP (take the average or roll), the subclass choice when it's due, the Ability Score Improvement or feat, the new features, and what changes for spells.
+- **⬆ Level up** (on *Features*, or in ✏ Edit) shows it all on one screen: HP (take the average or roll), the subclass choice when it's due, the Ability Score Improvement or feat, the new features, and what changes for spells. **✨ Walk me through it, step by step** does the same one choice at a time, explaining each, with the subclasses and feats to read and pick from (yours marked ★), suggestions for which score to raise, and the new spells to choose.
 - **Multiclassing.** In ✏ Edit, **＋ Add a class**. The level box is the total level, and the first class gets whatever isn't in the others. Saving throws come from the first class. Proficiency uses the total level, and HP adds each class's hit dice. With two spellcasting classes, slots follow the multiclass table; Warlock Pact Magic slots are tracked separately.
 - **Concentration.** Casting a concentration spell shows ◎ *spell name* at the top of the sheet. Tap it to stop concentrating.
 - **🖨 Print / 📄 Save as PDF**: on your screen, in the sheet window. Players print their own from **👤 Me → 🪙 Token & file**. The printed sheet carries a link with the whole character, so a PDF saved from Dungeons Desk can be imported again with nothing lost.

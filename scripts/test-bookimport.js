@@ -114,4 +114,60 @@ test('names are matched to the SRD when they are close', () => {
   assert.strictEqual(B.fixName('Zzqx', ['Black Pudding'], new Map()).ok, false);
 });
 
+test('feats, backgrounds and subclasses (2024 layout)', () => {
+  const all = lines([
+    [50, 760, 'MARSH WALKER'],
+    [50, 748, 'General Feat (Prerequisite: Level 4+, Strength or'],
+    [50, 736, 'Dexterity 13+)'],
+    [50, 724, 'You gain the following benefits.'],
+    [50, 712, 'Bog Stride. Difficult terrain made of mud costs'],
+    [50, 700, 'you no extra movement.'],
+    [50, 680, 'REED CUTTER'],
+    [50, 668, 'Ability Scores: Strength, Dexterity, Wisdom'],
+    [50, 656, 'Feat: Tough (see chapter 5)'],
+    [50, 644, 'Skill Proficiencies: Athletics and Survival'],
+    [50, 632, "Tool Proficiency: Woodcarver's Tools"],
+    [50, 620, 'Equipment: Choose A or B: (A) Sickle, 2 Pouches,'],
+    [50, 608, '12 GP; or (B) 50 GP'],
+    [50, 596, 'You cut reeds in the marsh and sold them in'],
+    [50, 584, 'town.'],
+    [320, 760, 'Path of the Bog'],
+    [320, 748, 'Barbarian Subclass'],
+    [320, 736, 'Become One with the Mire'],
+    [320, 724, 'Barbarians who follow this path draw strength'],
+    [320, 712, 'from the marsh.'],
+    [320, 700, 'Levet 3: Mud Rage'],
+    [320, 688, 'While your Rage is active, you ignore difficult'],
+    [320, 676, 'terrain.'],
+  ], [
+    [50, 760, 'Level 6: Sinking Grip'],
+    [50, 748, 'When you hit a creature, it has the Grappled'],
+    [50, 736, 'condition.'],
+  ]);
+  const es = B.findEntries(all, { feat: ['Alert'], background: ['Acolyte'], subclass: ['Champion'] });
+  assert.deepStrictEqual(es.map(e => [e.kind, e.name]), [['feat', 'Marsh Walker'], ['background', 'Reed Cutter'], ['subclass', 'Path of the Bog']]);
+  const ft = I.parseFeat(es[0].text);
+  assert.deepStrictEqual([ft.type, ft.prereq], ['general', 'Level 4+, Strength or Dexterity 13+'], 'the wrapped type line is one line');
+  assert.match(ft.desc, /\*\*Bog Stride\.\*\* Difficult terrain made of mud costs you no extra movement\.$/);
+  const bg = I.parseBackground(es[1].text);
+  assert.deepStrictEqual([bg.abilities, bg.feat, bg.skills, bg.tools, bg.equipment, bg.desc],
+    [['str', 'dex', 'wis'], 'Tough', ['Athletics', 'Survival'], ["Woodcarver's Tools"], 'Choose A or B: (A) Sickle, 2 Pouches, 12 GP; or (B) 50 GP', 'You cut reeds in the marsh and sold them in town.']);
+  const sc = I.parseSubclass(es[2].text);
+  assert.deepStrictEqual([sc.cls, sc.summary, sc.desc], ['Barbarian', 'Become One with the Mire', 'Barbarians who follow this path draw strength from the marsh.']);
+  assert.deepStrictEqual(sc.features, [{ level: 3, name: 'Mud Rage', desc: 'While your Rage is active, you ignore difficult terrain.' },
+    { level: 6, name: 'Sinking Grip', desc: 'When you hit a creature, it has the Grappled condition.' }], 'features carry on to the next page');
+});
+
+test('pasted text is told apart', () => {
+  assert.strictEqual(I.detect('Alert\nOrigin Feat\nYou gain the following benefits.'), 'feat');
+  assert.strictEqual(I.detect('Sage\nAbility Scores: Constitution, Intelligence, Wisdom\nFeat: Magic Initiate (Wizard)'), 'background');
+  assert.strictEqual(I.detect('Champion\nFighter Subclass: Pursue Physical Excellence\nLevel 3: Improved Critical'), 'subclass');
+  assert.strictEqual(I.detect('Cloak of Elvenkind\nWondrous Item, uncommon (requires attunement)'), 'item');
+});
+
+test('names: suggestions for a misread one', () => {
+  assert.deepStrictEqual(B.suggest('Blacx Puddmg', ['Black Pudding', 'Bandit', 'Black Bear']).slice(0, 1), ['Black Pudding']);
+  assert.deepStrictEqual(B.suggest('Zzqx', ['Black Pudding']), []);
+});
+
 console.log(process.exitCode ? `${passed} book import checks passed, some failed.` : `All ${passed} book import checks passed.`);

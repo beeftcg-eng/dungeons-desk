@@ -1,5 +1,5 @@
-// Import monsters, spells and magic items into the campaign (as homebrew notes):
-//  • Paste text: copy a stat block / spell / item from D&D Beyond, a PDF or a web page and paste it.
+// Import monsters, spells, magic items, feats, backgrounds and subclasses into the campaign (as homebrew notes):
+//  • Paste text: copy a stat block / spell / item / feat / background / subclass from D&D Beyond, a PDF or a web page and paste it.
 //  • Open5e: search the free, open-licensed Open5e library (SRD, Tome of Beasts, Deep Magic, …).
 //  • File: JSON in Open5e or 5e-database format.
 //  • Book PDF: a book the DM owns (renderer/js/book-import.js finds the entries; they're saved only in this campaign).
@@ -18,6 +18,10 @@ window.Importer = (() => {
     if (/^\s*https?:\/\//i.test(t.trim())) return 'link';
     if (/(^|\n)\s*(armor class|ac)\s+\d+/i.test(t) && /(^|\n)\s*(hit points|hp)\s+\d+/i.test(t)) return 'monster';
     if (/casting time/i.test(t)) return 'spell';
+    const top = t.split('\n').map(l => l.trim()).filter(Boolean).slice(0, 4).join('\n');
+    if (/(^|\n)\s*(ability scores|skill proficiencies)\s*:/i.test(t) && /(^|\n)\s*(feat|equipment|tool proficienc\w*)\s*:/i.test(t)) return 'background';
+    if (SUBCLASS_RE.test(top)) return 'subclass';
+    if (FEAT_RE.test(top)) return 'feat';
     if (/(common|uncommon|rare|very rare|legendary|artifact|rarity varies)/i.test(t.split('\n').slice(0, 4).join(' '))) return 'item';
     return null;
   }
@@ -149,6 +153,65 @@ window.Importer = (() => {
     return it;
   }
 
+  // ----- Feats, backgrounds and subclasses (2024 layout) -----
+  const FEAT_RE = /(^|\n)\s*(origin|general|fighting style|epic boon)\s+feat\b/i;
+  const CLASS_NAMES = ['Barbarian', 'Bard', 'Cleric', 'Druid', 'Fighter', 'Monk', 'Paladin', 'Ranger', 'Rogue', 'Sorcerer', 'Warlock', 'Wizard'];
+  const SUBCLASS_RE = new RegExp(`(^|\\n)\\s*(${CLASS_NAMES.join('|')})\\s+subclass\\b`, 'i');
+  const FEATURE_RE = /^level\s*(\d{1,2})\s*[:.;]\s*(.+)$/i;
+  const paras = (lines) => lines.join('\n\n').replace(/^([A-Z][\w'’-]*(?: (?:[A-Z][\w'’-]*|of|the|and|or|a|to|in|with|for)){0,5})\. /gm, '**$1.** ');
+  function parseFeat(text) {
+    const lines = norm(text).split('\n').map(l => l.trim()).filter(Boolean);
+    const ft = { name: (lines[0] || 'Imported Feat').replace(/\s*\((?:legacy|2014|2024)\)\s*$/i, ''), type: 'general', prereq: '' };
+    let start = 1;
+    for (let i = 1; i < Math.min(lines.length, 4); i++) {
+      const m = /^(origin|general|fighting style|epic boon)\s+feat\b\s*(?:\((?:prerequisites?:?\s*)?([^)]*)\))?/i.exec(lines[i]);
+      if (m) { ft.type = m[1].toLowerCase().replace(' ', '-'); ft.prereq = (m[2] || '').trim(); start = i + 1; break; }
+      const p = /^prerequisites?:\s*(.+)$/i.exec(lines[i]);
+      if (p) { ft.prereq = p[1].trim(); start = i + 1; }
+    }
+    ft.desc = paras(lines.slice(start));
+    return ft;
+  }
+  const ABIL_OF = (s) => String(s || '').split(/,|\band\b|\bor\b/).map(x => x.trim().toLowerCase().slice(0, 3)).filter(a => ABIL.includes(a));
+  const listOf = (s) => String(s || '').replace(/\.$/, '').split(/,\s*|\s+and\s+/).map(x => x.trim()).filter(Boolean);
+  function parseBackground(text) {
+    const lines = norm(text).split('\n').map(l => l.trim()).filter(Boolean);
+    const bg = { name: (lines[0] || 'Imported Background').replace(/\s*\((?:legacy|2014|2024)\)\s*$/i, ''), abilities: [], feat: '', skills: [], tools: [], equipment: '' }, rest = [];
+    lines.slice(1).forEach(l => {
+      const m = /^(ability scores?|feat|skill proficienc\w*|tool proficienc\w*|equipment)\s*:\s*(.*)$/i.exec(l);
+      if (!m) return rest.push(l);
+      const k = m[1].toLowerCase(), v = m[2].trim();
+      if (k.startsWith('ability')) bg.abilities = ABIL_OF(v);
+      else if (k === 'feat') bg.feat = v.replace(/\s*\(see [^)]*\)/i, '').trim();
+      else if (k.startsWith('skill')) bg.skills = listOf(v);
+      else if (k.startsWith('tool')) bg.tools = /^choose/i.test(v) ? [v] : listOf(v);
+      else bg.equipment = v;
+    });
+    bg.desc = paras(rest);
+    return bg;
+  }
+  function parseSubclass(text) {
+    const lines = norm(text).split('\n').map(l => l.trim()).filter(Boolean);
+    const sc = { name: (lines[0] || 'Imported Subclass').replace(/\s*\((?:legacy|2014|2024)\)\s*$/i, ''), cls: '', summary: '', features: [] };
+    let i = 1;
+    const m = new RegExp(`^(${CLASS_NAMES.join('|')})\\s+subclass\\b[:\\s]*(.*)$`, 'i').exec(lines[1] || '');
+    if (m) { sc.cls = title(m[1]); sc.summary = m[2].trim(); i = 2; }
+    // A short line under "Barbarian Subclass" with no full stop is the subclass's tagline.
+    if (!sc.summary && lines[i] && lines[i].length < 80 && !/[.:]$/.test(lines[i]) && !FEATURE_RE.test(lines[i])) sc.summary = lines[i++];
+    const intro = [];
+    let cur = null;
+    lines.slice(i).forEach(l => {
+      const f = FEATURE_RE.exec(l);
+      if (f) { cur = { level: Number(f[1]), name: f[2].trim().replace(/\.$/, ''), lines: [] }; sc.features.push(cur); }
+      else (cur ? cur.lines : intro).push(l);
+    });
+    if (!sc.cls) sc.cls = CLASS_NAMES.find(c => new RegExp(`\\b${c}s?\\b`, 'i').test(intro.join(' '))) || 'Fighter';
+    sc.desc = paras(intro);
+    sc.features = sc.features.map(f => ({ level: f.level, name: f.name, desc: paras(f.lines) }));
+    return sc;
+  }
+  const PARSE = { monster: parseMonster, spell: parseSpell, item: parseItem, feat: parseFeat, background: parseBackground, subclass: parseSubclass };
+
   // ======================= Open5e / JSON converters =======================
   function fromJsonMonster(o) {
     const ac = Array.isArray(o.armor_class) ? o.armor_class[0] : { value: o.armor_class };
@@ -200,13 +263,26 @@ window.Importer = (() => {
     if (kind === 'spell') return h('div.spell-card', h('h1', obj.name), h('div.spell-sub', Homebrew.levelText(obj.level, obj.school) + (obj.ritual ? ' (Ritual)' : ''), obj.classes.length ? h('span.dim', ' · ' + obj.classes.join(', ')) : null),
       h('div.spell-props', [['Casting Time', obj.time], ['Range', obj.range], ['Components', obj.comp], ['Duration', (obj.conc ? 'Concentration, ' : '') + obj.dur]].map(([k, v]) => h('div', h('b', k + ': '), v || '—'))),
       h('div.md', { html: MD.simple(obj.desc + (obj.higher ? `\n\n***Using a Higher-Level Spell Slot.*** ${obj.higher}` : '')) }));
-    return h('div.spell-card', h('h1', obj.name), h('div.spell-sub', `${obj.type}, ${obj.rarity}${obj.attune ? ' (requires attunement)' : ''}`), h('div.md', { html: MD.simple(obj.desc) }));
+    const md = (t) => h('div.md', { html: MD.simple(t || '') });
+    if (kind === 'feat') return h('div.spell-card', h('h1', obj.name), h('div.spell-sub', `${Homebrew.FEAT_TYPES[obj.type] || 'General'} Feat${obj.prereq ? ` (Prerequisite: ${obj.prereq})` : ''}`), md(obj.desc));
+    if (kind === 'background') {
+      const AB = { str: 'Strength', dex: 'Dexterity', con: 'Constitution', int: 'Intelligence', wis: 'Wisdom', cha: 'Charisma' };
+      return h('div.spell-card', h('h1', obj.name), h('div.spell-sub', 'Background'),
+        h('div.spell-props', [['Ability Scores', obj.abilities.map(a => AB[a]).join(', ')], ['Feat', obj.feat], ['Skill Proficiencies', obj.skills.join(', ')], ['Tool Proficiency', obj.tools.join(', ')], ['Equipment', obj.equipment]].map(([k, v]) => h('div', h('b', k + ': '), v || '—'))),
+        md(obj.desc));
+    }
+    if (kind === 'subclass') return h('div.spell-card', h('h1', obj.name), h('div.spell-sub', `${obj.cls} Subclass${obj.summary ? `: ${obj.summary}` : ''}`), md(obj.desc),
+      obj.features.map(f => [h('h3', `Level ${f.level}: ${f.name}`), md(f.desc)]), obj.features.length ? null : h('p.dim', 'No “Level 3: Feature” lines found. Use “Edit first” to add the features.'));
+    return h('div.spell-card', h('h1', obj.name), h('div.spell-sub', `${obj.type}, ${obj.rarity}${obj.attune ? ' (requires attunement)' : ''}`), md(obj.desc));
   }
   function saveButtons(kind, obj, source, after) {
     const done = (p) => { toast(`${obj.name} added to your campaign`); after && after(p); };
     const edit = () => {
       if (kind === 'monster') Statblock.openBuilder(obj, (sb) => Homebrew.save('monster', sb, { source }).then(done));
       else if (kind === 'spell') Homebrew.spellForm({ ...obj, source }, (x) => Homebrew.save('spell', x).then(done));
+      else if (kind === 'feat') Homebrew.featForm({ ...obj, source }, (x) => Homebrew.save('feat', x).then(done));
+      else if (kind === 'background') Homebrew.backgroundForm({ ...obj, equipText: obj.equipment, source }, (x) => Homebrew.save('background', x).then(done));
+      else if (kind === 'subclass') Homebrew.subclassForm({ ...obj, source }, (x) => Homebrew.save('subclass', x).then(done));
       else Homebrew.itemForm({ ...obj, source }, (x) => Homebrew.save('item', x).then(done));
     };
     return h('div.row', h('button.primary', { onclick: () => Homebrew.save(kind, { ...obj, source }, { source }).then(done) }, '💾 Save to campaign'), h('button', { onclick: edit }, '✏ Edit first'));
@@ -222,8 +298,8 @@ window.Importer = (() => {
     tab('📕 Book PDF', bookTab);
 
     function pasteTab() {
-      const ta = h('textarea.imp-text', { rows: 16, spellcheck: 'false', placeholder: 'Paste a monster stat block, a spell or a magic item here.\n\nFrom D&D Beyond: open the monster/spell/item page, select everything from the name down to the end of the block, copy (Ctrl+C) and paste here (Ctrl+V).\nWorks with PDFs and most websites too.' });
-      const kindSel = h('select', h('option', { value: '' }, 'Detect automatically'), h('option', { value: 'monster' }, 'Monster'), h('option', { value: 'spell' }, 'Spell'), h('option', { value: 'item' }, 'Magic item'));
+      const ta = h('textarea.imp-text', { rows: 16, spellcheck: 'false', placeholder: 'Paste a monster stat block, a spell, a magic item, a feat, a background or a subclass here.\n\nFrom D&D Beyond: open the page, select everything from the name down to the end of the block, copy (Ctrl+C) and paste here (Ctrl+V).\nWorks with PDFs and most websites too.' });
+      const kindSel = h('select', h('option', { value: '' }, 'Detect automatically'), h('option', { value: 'monster' }, 'Monster'), h('option', { value: 'spell' }, 'Spell'), h('option', { value: 'item' }, 'Magic item'), h('option', { value: 'feat' }, 'Feat'), h('option', { value: 'background' }, 'Background'), h('option', { value: 'subclass' }, 'Subclass'));
       const out = h('div.imp-preview', h('p.dim', 'The preview appears here.'));
       const run = () => {
         out.innerHTML = '';
@@ -236,8 +312,8 @@ window.Importer = (() => {
             h('p', h('b', 'Do this instead: '), 'open the page in your browser, select the stat block (from the name to the last action), copy it, and paste the text here. Anything you can see on the page works, including content you own.')));
           return;
         }
-        if (!kind) { out.append(h('p', 'Couldn\'t tell what this is. Choose Monster, Spell or Magic item above.')); return; }
-        const obj = kind === 'monster' ? parseMonster(text) : kind === 'spell' ? parseSpell(text) : parseItem(text);
+        if (!kind) { out.append(h('p', 'Couldn\'t tell what this is. Choose what it is in the list above.')); return; }
+        const obj = PARSE[kind](text);
         out.append(h('div.row', h('span.chip.live', { style: 'text-transform:capitalize' }, kind), h('span.dim', 'Check the preview, then save. Use “Edit first” to fix anything the parser missed.')), saveButtons(kind, obj, 'Imported (pasted)', () => m.close()), preview(kind, obj));
       };
       ta.addEventListener('input', U.debounce(run, 250));
@@ -275,11 +351,11 @@ window.Importer = (() => {
       setTimeout(() => q.focus(), 30);
     }
 
-    // A book PDF the DM owns: every monster, spell and magic item found in it, to tick and save into this campaign.
+    // A book PDF the DM owns: every monster, spell, magic item, feat, background and subclass found in it, to tick and save into this campaign.
     function bookTab() {
       const file = h('input', { type: 'file', accept: '.pdf,application/pdf', style: 'display:none' });
       body.append(file, h('div.imp-book-intro',
-        h('p', 'Pick a PDF of a book you own, like a Monster Manual or a Dungeon Master\'s Guide. The app finds the monsters, spells and magic items in it, and you choose which ones to save as homebrew in this campaign.'),
+        h('p', 'Pick a PDF of a book you own, like a Monster Manual, a Dungeon Master\'s Guide or a Player\'s Handbook. The app finds the monsters, spells, magic items, feats, backgrounds and subclasses in it, and you choose which ones to save as homebrew in this campaign.'),
         h('p.dim.small', 'The book stays on this device: nothing is uploaded, and what you save lives only in this campaign\'s notes. Players see an entry only if you share it with them.'),
         h('p.dim.small', 'Scanned books have rough text. Entries that look wrong get a ⚠: check them against the page shown, or fix them with “Edit first”.'),
         h('button.primary', { onclick: () => file.click() }, '📕 Choose a PDF')));
@@ -298,46 +374,96 @@ window.Importer = (() => {
         body.innerHTML = ''; body.append(h('p', 'That PDF couldn\'t be read. ', h('span.dim', e.message || String(e)))); return;
       }
       if (!document.body.contains(body)) return;
-      label.textContent = 'Finding monsters, spells and items…';
+      label.textContent = 'Finding monsters, spells, items and character options…';
       await new Promise(r => setTimeout(r, 30));
-      const hb = Homebrew.list(), have = new Set([...hb.monsters, ...hb.spells, ...hb.items].map(x => x.name.toLowerCase()));
-      const dict = { monster: SRDREF.monsters.map(m => m.name), spell: SRDREF.spells.map(m => m.name), item: [...new Set([...SRDREF.items.map(m => m.name), ...CHARDATA.magicItems.map(m => m.name)])] };
+      const hb = Homebrew.list(), have = new Set([...hb.monsters, ...hb.spells, ...hb.items, ...hb.feats, ...hb.backgrounds, ...hb.subclasses].map(x => x.name.toLowerCase()));
+      const dict = { monster: SRDREF.monsters.map(m => m.name), spell: SRDREF.spells.map(m => m.name), item: [...new Set([...SRDREF.items.map(m => m.name), ...CHARDATA.magicItems.map(m => m.name)])],
+        feat: CHARDATA.feats.map(f => f.name), background: CHARDATA.backgrounds.map(b => b.name), subclass: CHARDATA.classes.flatMap(c => c.subclasses.map(x => x.name)) };
       const entries = BookImport.findEntries(lines, dict).map((e, i) => {
-        const obj = e.kind === 'monster' ? parseMonster(e.text) : e.kind === 'spell' ? parseSpell(e.text) : parseItem(e.text);
+        const obj = PARSE[e.kind](e.text);
         obj.name = e.name;
         const warn = [...e.warn.map(w => w === 'name' ? 'name may be misread' : w), ...(e.kind === 'monster' ? BookImport.checkMonster(obj, e.text) : [])];
         const dup = have.has(e.name.toLowerCase());
         return { ...e, i, obj, warn, dup, pick: !dup };
       });
-      showBook(source, entries, stop);
+      showBook(source, entries, stop, dict, have);
     }
-    function showBook(source, entries, stopped) {
+    function showBook(source, entries, stopped, dict, have) {
       body.innerHTML = '';
-      if (!entries.length) { body.append(h('p', 'No monsters, spells or magic items found in this PDF.'), h('p.dim', 'A PDF that is only pictures of pages (no text) can\'t be read. Try pasting entries in the 📋 Paste text tab instead.')); return; }
-      const KINDS = { monster: '🐉 Monster', spell: '✨ Spell', item: '💎 Item' };
+      if (!entries.length) { body.append(h('p', 'No monsters, spells, magic items, feats, backgrounds or subclasses found in this PDF.'), h('p.dim', 'A PDF that is only pictures of pages (no text) can\'t be read. Try pasting entries in the 📋 Paste text tab instead.')); return; }
+      const KINDS = { monster: '🐉 Monster', spell: '✨ Spell', item: '💎 Item', feat: '🎖 Feat', background: '📜 Background', subclass: '🧬 Subclass' };
+      const PLURAL = { monster: 'monsters', spell: 'spells', item: 'magic items', feat: 'feats', background: 'backgrounds', subclass: 'subclasses' };
       const count = (k) => entries.filter(e => e.kind === k).length;
-      const kindSel = h('select', h('option', { value: '' }, `Everything (${entries.length})`), ['monster', 'spell', 'item'].filter(count).map(k => h('option', { value: k }, `${KINDS[k]}s (${count(k)})`)));
+      const kindSel = h('select', h('option', { value: '' }, `Everything (${entries.length})`), Object.keys(KINDS).filter(count).map(k => h('option', { value: k }, `${KINDS[k]}s (${count(k)})`)));
+      const about = (e) => e.kind === 'monster' ? `CR ${e.obj.cr}` : e.kind === 'item' ? e.obj.rarity : e.kind === 'spell' ? (e.obj.level ? `Level ${e.obj.level}` : 'Cantrip')
+        : e.kind === 'feat' ? `${Homebrew.FEAT_TYPES[e.obj.type] || 'General'}` : e.kind === 'subclass' ? `${e.obj.cls}, ${e.obj.features.length} features` : '';
       const q = h('input', { placeholder: 'Filter by name…' }), cleanOnly = h('input', { type: 'checkbox' });
-      const list = h('div.imp-results'), out = h('div.imp-preview'), go = h('button.primary');
+      const list = h('div.imp-results'), out = h('div.imp-preview'), go = h('button.primary'), nextBtn = h('button', { title: 'Show the next entry with a ⚠ (Enter in a name does the same)' });
+      const rows = new Map();
       let current = null;
       const shown = () => entries.filter(e => (!kindSel.value || e.kind === kindSel.value) && (!cleanOnly.checked || !e.warn.length) && (!q.value.trim() || e.name.toLowerCase().includes(q.value.trim().toLowerCase())));
-      const sync = () => { const n = entries.filter(e => e.pick).length; go.textContent = `📥 Save ${n} to this campaign`; go.disabled = !n; };
-      const row = (e) => h('div.ref-item.imp-book-row' + (current === e ? '.active' : ''), { onclick: (ev) => { if (ev.target.type === 'checkbox') return; current = e; draw(); show(e); } },
-        h('input', { type: 'checkbox', checked: e.pick, onchange: (ev) => { e.pick = ev.target.checked; sync(); } }),
-        h('div.grow', h('div', e.name, e.warn.length ? h('span.imp-warn', { title: e.warn.join(', ') }, ' ⚠') : null),
-          h('div.dim.small', [KINDS[e.kind], e.kind === 'monster' ? `CR ${e.obj.cr}` : e.kind === 'item' ? e.obj.rarity : e.obj.level ? `Level ${e.obj.level}` : 'Cantrip', `p. ${e.page}`, e.dup ? 'already in this campaign' : ''].filter(Boolean).join(' · '))));
+      const sync = () => {
+        const n = entries.filter(e => e.pick).length, w = entries.filter(e => e.warn.length).length, names = entries.filter(misread).length;
+        go.textContent = `📥 Save ${n} to this campaign`; go.disabled = !n;
+        nextBtn.textContent = !w ? '✓ Nothing to check' : names ? `⚠ Next name to fix (${names})` : `⚠ Next to check (${w})`; nextBtn.disabled = !w;
+      };
+      // A new name: the "name may be misread" warning goes, and whether it's already in the campaign is checked again.
+      function rename(e, v, from, keep) {
+        v = v.replace(/\s+/g, ' ').trim();
+        if (!v || (v === e.name && !keep)) return;
+        e.name = e.obj.name = v;
+        e.warn = e.warn.filter(w => w !== 'name may be misread');
+        e.dup = have.has(v.toLowerCase());
+        const r = rows.get(e);
+        if (r) { r.querySelector('.imp-warn').hidden = !e.warn.length; r.querySelector('.imp-warn').title = e.warn.join(', '); r.querySelector('.imp-row-sub').textContent = sub(e); if (from !== r) r.querySelector('.imp-name').value = v; }
+        if (current === e && from !== out) show(e);
+        sync();
+      }
+      const misread = (e) => e.warn.includes('name may be misread');
+      const sub = (e) => [KINDS[e.kind], about(e), `p. ${e.page}`, e.dup ? 'already in this campaign' : ''].filter(Boolean).join(' · ');
+      function select(e, focusName) {
+        current = e;
+        rows.forEach((r, x) => r.classList.toggle('active', x === e));
+        show(e);
+        const r = rows.get(e);
+        if (r) { r.scrollIntoView({ block: 'nearest' }); if (focusName) { const n = r.querySelector('.imp-name'); n.focus(); n.select(); } }
+      }
+      // The next entry (in the list as filtered) that still has a ⚠, after the one that's open: misread names first,
+      // since they're quick to fix, then anything else.
+      function nextWarn(focusName = true) {
+        const s = shown(), at = current ? s.indexOf(current) : -1, order = [...s.slice(at + 1), ...s.slice(0, at + 1)].filter(x => x !== current);
+        const e = order.find(misread) || order.find(x => x.warn.length);
+        if (e) select(e, focusName); else toast('Nothing left to check in this list');
+      }
+      nextBtn.addEventListener('click', () => nextWarn());
+      const row = (e) => {
+        const name = h('input.imp-name', { value: e.name, spellcheck: 'false', title: 'Type to fix the name. Enter goes to the next ⚠.',
+          onfocus: () => { if (current !== e) select(e); },
+          onchange: () => rename(e, name.value, r),
+          onkeydown: (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); rename(e, name.value, r); nextWarn(); } if (ev.key === 'Escape') { name.value = e.name; name.blur(); } } });
+        const r = h('div.ref-item.imp-book-row' + (current === e ? '.active' : ''), { onclick: (ev) => { if (ev.target.tagName === 'INPUT') return; select(e); } },
+          h('input', { type: 'checkbox', checked: e.pick, onchange: (ev) => { e.pick = ev.target.checked; sync(); } }),
+          h('div.grow', h('div.row.imp-row-name', name, h('span.imp-warn', { title: e.warn.join(', '), hidden: !e.warn.length }, '⚠')),
+            h('div.dim.small.imp-row-sub', sub(e))));
+        rows.set(e, r);
+        return r;
+      };
       function draw() {
         const s = shown();
         list.innerHTML = '';
+        rows.clear();
         list.append(h('div.row.imp-book-bulk', h('span.dim.small.grow', `${s.length} shown`), h('button.small', { onclick: () => { s.forEach(e => (e.pick = true)); draw(); sync(); } }, 'Tick all'), h('button.small', { onclick: () => { s.forEach(e => (e.pick = false)); draw(); sync(); } }, 'Untick all')));
         s.forEach(e => list.append(row(e)));
       }
       function show(e) {
         out.innerHTML = '';
-        const name = h('input', { value: e.name, oninput: () => { e.name = e.obj.name = name.value; } , onchange: () => draw() });
+        const name = h('input.imp-name-big', { value: e.name, onchange: () => rename(e, name.value, out), onkeydown: (ev) => { if (ev.key === 'Enter') { rename(e, name.value, out); nextWarn(); } } });
+        const ideas = misread(e) && dict[e.kind] ? BookImport.suggest(e.name, dict[e.kind]) : [];
         out.append(h('div.row', h('label.field.grow', h('span', `Name · page ${e.page} of ${source}`), name)),
+          ideas.length ? h('div.row.imp-ideas', h('span.dim.small', 'Did you mean'), ideas.map(n => h('button.small', { onclick: () => { rename(e, n); } }, n)),
+            h('button.small', { onclick: () => rename(e, e.name, null, true), title: 'Keep the name as it is' }, '✓ It\'s right')) : null,
           e.warn.length ? h('div.callout.callout-warning', h('div.callout-title', '⚠ Check this one'), h('p', `Looks wrong: ${e.warn.join(', ')}. Compare it with page ${e.page}, and use “Edit first” to fix it.`)) : null,
-          saveButtons(e.kind, e.obj, source, () => { e.pick = false; e.dup = true; draw(); sync(); }),
+          saveButtons(e.kind, e.obj, source, () => { e.pick = false; e.dup = true; have.add(e.name.toLowerCase()); const r = rows.get(e); if (r) { r.querySelector('input[type=checkbox]').checked = false; r.querySelector('.imp-row-sub').textContent = sub(e); } sync(); }),
           preview(e.kind, e.obj),
           h('details.imp-book-raw', h('summary.dim.small', 'The text as it came out of the PDF'), h('pre', e.text)));
       }
@@ -347,7 +473,7 @@ window.Importer = (() => {
         for (let i = 0; i < chosen.length; i++) {
           go.textContent = `Saving ${i + 1} of ${chosen.length}…`;
           await Homebrew.save(chosen[i].kind, { ...chosen[i].obj, source }, { open: false, source });
-          chosen[i].pick = false; chosen[i].dup = true;
+          chosen[i].pick = false; chosen[i].dup = true; have.add(chosen[i].name.toLowerCase());
         }
         await Notes.refresh();
         toast(`Saved ${chosen.length} entr${chosen.length === 1 ? 'y' : 'ies'} from ${source} into Homebrew`);
@@ -356,10 +482,11 @@ window.Importer = (() => {
       [kindSel, cleanOnly].forEach(x => x.addEventListener('change', draw));
       q.addEventListener('input', U.debounce(draw, 150));
       const warned = entries.filter(e => e.warn.length).length;
-      body.append(h('div.row', h('b', `📕 ${source}`), h('span.dim', `${['monster', 'spell', 'item'].filter(count).map(k => `${count(k)} ${k === 'monster' ? 'monsters' : k === 'spell' ? 'spells' : 'magic items'}`).join(', ')} found${stopped ? ' (stopped early)' : ''}${warned ? ` · ${warned} with ⚠` : ''}`)),
-        h('div.row', kindSel, q, h('label.chk', cleanOnly, ' Hide ones with ⚠'), h('span.grow'), go),
+      body.append(h('div.row', h('b', `📕 ${source}`), h('span.dim', `${Object.keys(KINDS).filter(count).map(k => `${count(k)} ${PLURAL[k]}`).join(', ')} found${stopped ? ' (stopped early)' : ''}${warned ? ` · ${warned} with ⚠` : ''}`)),
+        h('div.row', kindSel, q, h('label.chk', cleanOnly, ' Hide ones with ⚠'), nextBtn, h('span.grow'), go),
         h('div.imp-o5', list, out));
-      out.append(h('p.dim', 'Click an entry to check it before saving. Everything ticked is saved with the button above.'));
+      out.append(h('p.dim', 'Click an entry to check it before saving. Everything ticked is saved with the button above.'),
+        warned ? h('p.dim', `To fix names quickly: press “⚠ Next name to fix”, pick a suggestion or type the right name in the list, and press Enter to go on to the next one.`) : null);
       draw(); sync();
     }
 
@@ -390,5 +517,5 @@ window.Importer = (() => {
     }
   }
 
-  return { open, parseMonster, parseSpell, parseItem, detect, fromJsonMonster, fromJsonSpell, fromJsonItem };
+  return { open, parseMonster, parseSpell, parseItem, parseFeat, parseBackground, parseSubclass, detect, fromJsonMonster, fromJsonSpell, fromJsonItem };
 })();

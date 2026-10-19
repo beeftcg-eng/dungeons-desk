@@ -2,7 +2,7 @@
 // online table) and the standalone sheet app (kept with each character). The notes are one text: each "## Title" line
 // starts a session, newest first, and anything above the first heading becomes "Earlier notes".
 // The pane is only redrawn when the notes load or a session is added or removed, never while the player types.
-// opts: { load() → Promise<text>, save(text) → Promise, where: text saying where they're kept, fileName() → 'X notes.md' }
+// opts: { load() → Promise<text>, save(text) → Promise, where: text (or a function giving it) saying where they're kept, fileName() → 'X notes.md' }
 window.SessionNotes = (() => {
   const MAX = 200000;
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -42,7 +42,7 @@ window.SessionNotes = (() => {
       }
       const today = dayLabel(), hasToday = notes.length && notes[0].title.includes(today);
       el.innerHTML = `<div class="cs-card"><div class="sn-head"><b>📝 Session notes</b><span class="sn-saved"></span></div>
-          <p class="cs-hint">Only you see these. ${esc(opts.where || '')}</p>
+          <p class="cs-hint">Only you see these. ${esc((typeof opts.where === 'function' ? opts.where() : opts.where) || '')}</p>
           <div class="sn-btns">${hasToday ? '' : '<button class="cs-btn primary" data-n="new">＋ Start today\'s notes</button>'}${notes.length ? '<button class="cs-btn" data-n="file">⬇ Save as a file</button>' : ''}</div></div>` +
         (notes.length ? notes.map((x, i) => `<details class="cs-card sn-sess" data-i="${i}"${i ? '' : ' open'}><summary><span class="sn-t">${esc(x.title)}</span><small>${esc(x.body.split('\n')[0])}</small></summary>
           <textarea class="sn-text" placeholder="Names, clues, loot, things to remember…">${esc(x.body)}</textarea>
@@ -88,6 +88,14 @@ window.SessionNotes = (() => {
     return {
       // Load again (another player joined on this phone, say). A save still waiting is dropped, so flush() first.
       reload() { if (timer) { clearTimeout(timer); timer = null; } load(); },
+      // A new section on top (the DM's recap, copied in). Only once the notes have loaded; false if they haven't.
+      add(title, body) {
+        if (state !== 'ready') return false;
+        if (serialize([{ title, body }, ...notes]).length > MAX) return false;
+        notes.unshift({ title: String(title).replace(/\s+/g, ' ').trim().slice(0, 120) || 'Notes', body: String(body || '').trim() });
+        draw(); save();
+        return true;
+      },
       // Send a waiting save now (leaving the character).
       flush() { if (timer) { clearTimeout(timer); timer = null; opts.save(serialize(notes)); } },
       destroy() { this.flush(); gen++; el.removeEventListener('input', onInput); el.removeEventListener('click', onClick); el.innerHTML = ''; },

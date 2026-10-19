@@ -11,8 +11,8 @@
     const card = (pub.partyCards || []).find(c => c.name.toLowerCase() === me) || null;
     const feed = client.display ? [] : (pub.feed || []).filter(f => (f.player || '').toLowerCase() === me);
     const hb = pub.homebrew || {};
-    const homebrew = client.display ? null : { spells: (hb.spells || []).filter(x => forMe(x.to)), items: (hb.items || []).filter(x => forMe(x.to)) };
-    return { initiative: pub.initiative, handouts, wiki, map: pub.map, calendar: pub.calendar, party: pub.party || [], card, feed, homebrew, you: client.player || null };
+    const homebrew = client.display ? null : Object.fromEntries(['spells', 'items', 'feats', 'backgrounds', 'subclasses'].map(k => [k, (hb[k] || []).filter(x => forMe(x.to))]));
+    return { initiative: pub.initiative, handouts, wiki, map: pub.map, calendar: pub.calendar, party: pub.party || [], card, feed, homebrew, recap: client.display ? null : pub.recap || null, you: client.player || null };
   }
   if (typeof module !== 'undefined' && module.exports) module.exports = { viewFor };
   else root.viewFor = viewFor;

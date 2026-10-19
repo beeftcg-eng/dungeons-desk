@@ -493,6 +493,12 @@ td .src { margin-left: 8px; }
 .imp-book-row input[type=checkbox] { margin-top: 3px; flex: none; }
 .imp-book-bulk { position: sticky; top: -4px; background: var(--bg2); padding: 4px 6px; z-index: 1; }
 .imp-warn { color: var(--warn, #e0a030); }
+/* A name in the list is an input that looks like text until it's clicked, so misread names are fixed in place. */
+.imp-row-name { gap: 4px; flex-wrap: nowrap; }
+.imp-body .row input.imp-name { flex: 1; min-width: 0; background: transparent; border: 1px solid transparent; color: var(--text); padding: 1px 4px; margin: -2px -5px; font: inherit; border-radius: 4px; }
+.imp-body .row input.imp-name:hover { border-color: var(--line); }
+.imp-body .row input.imp-name:focus { background: var(--panel); border-color: var(--accent); outline: none; }
+.imp-ideas { gap: 6px; flex-wrap: wrap; margin: -4px 0 8px; }
 .imp-book-raw pre { white-space: pre-wrap; font-size: 12px; max-height: 30vh; overflow: auto; background: var(--bg2); padding: 8px; border-radius: 6px; }
 .imp-body .row input { flex: 1; }
 
@@ -572,6 +578,8 @@ td .src { margin-left: 8px; }
 .session-pc { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; text-align: left; padding: 8px 10px; }
 .chips { display: inline-flex; flex-wrap: wrap; gap: 4px; margin-left: auto; }
 .chips i { font-style: normal; font-size: 12px; background: var(--bg2); border: 1px solid var(--line); border-radius: 10px; padding: 1px 8px; }
+.session-recap-text { width: 100%; box-sizing: border-box; resize: vertical; min-height: 90px; }
+.session-recap-btns { margin-top: 8px; }
 .session-pins details { border-top: 1px solid var(--line); padding: 6px 0; }
 .session-pins summary { display: flex; align-items: center; gap: 6px; cursor: pointer; font-weight: 600; }
 .session-pins .md { padding: 8px 2px 0; }

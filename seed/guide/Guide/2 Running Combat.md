@@ -58,4 +58,5 @@ actions:
 - **Quick dice:** d20, advantage, disadvantage and the usual dice.
 - **The party:** AC, HP and passive Perception. Tap someone to open their sheet.
 - **📌 Pinned notes:** pin tonight's session plan, an NPC or a location with **📌** in the note toolbar, then open it right here.
+- **📜 Last time… (for players):** write a few lines about what happened last session and press **📣 Show to players**. It pops up on each player's phone when they open the game page, stays at the top of their 📝 Notes tab, and they can copy it into their own notes. Change it and send the new version, or **Stop showing** it.
 

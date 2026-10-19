@@ -46,7 +46,7 @@ window.Settings = (() => {
         h('div.row',
           h('button', { onclick: async (e) => { e.target.disabled = true; try { await dm.backup.now(); toast('Backup saved'); } catch (err) { toast('Backup failed: ' + err.message, 'err'); } draw(); } }, '💾 Back up now'),
           h('button', { onclick: () => dm.backup.reveal() }, '📂 Open backups')),
-        h('p.hint', 'To restore, open a backup folder with 🗺 → “Open a campaign folder…”, or copy notes back from it.'));
+        h('p.hint', 'To restore, open a backup folder with 🗺 → “Open a campaign folder…”, or copy notes back from it. The ★ homebrew library is backed up too, in “★ Homebrew Library” next to your campaigns’ backups.'));
     });
 
     root.append(h('div.page',
@@ -61,9 +61,9 @@ window.Settings = (() => {
             h('button', { title: 'A .ddchar.json file from the Dungeons Desk character sheet, or a character sheet PDF (D&D Beyond, the official fillable sheet, or printed from Dungeons Desk)', onclick: () => Sheets.importNew().then(ok => ok && draw()) }, '⇩ Add from a file or PDF')),
           h('label.chk', { style: 'margin-top:10px' }, h('input', { type: 'checkbox', checked: !!(Store.get().playerView || {}).allHomebrew, onchange: (e) => {
             (Store.get().playerView = Store.get().playerView || {}).allHomebrew = e.target.checked; Store.save(); publishToPlayers();
-            toast(e.target.checked ? 'Players now get all your homebrew spells and items' : 'Players now get only the homebrew you share');
-          } }), ' ★ Players get all my homebrew spells and magic items'),
-          h('p.dim.small', 'They show up, marked ★, when players search for spells and gear on their character sheets. Off: only notes shared with 👥 Share. Notes shared with particular players stay just theirs, and secret boxes are always left out.')),
+            toast(e.target.checked ? 'Players now get all your homebrew' : 'Players now get only the homebrew you share');
+          } }), ' ★ Players get all my homebrew'),
+          h('p.dim.small', 'Spells, magic items, feats, backgrounds and subclasses show up, marked ★, on players\' character sheets (monsters never do). Off: only notes shared with 👥 Share. Notes shared with particular players stay just theirs, and secret boxes are always left out.')),
         h('div.card',
           h('h3', '🗺 Campaign'),
           dm.isWeb ? h('p', 'Campaign: ', h('b', vault), '. On the phone app, notes, handouts, tokens and everything else are saved on this device. Export a campaign file to move it to or from the desktop app.')

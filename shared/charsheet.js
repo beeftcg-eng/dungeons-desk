@@ -8,13 +8,19 @@ window.CharSheet = (() => {
   const EMPTY = { skills: {}, classes: [], species: [], backgrounds: [], feats: [], equipment: [], spells: [], magicItems: [] };
   let merged = null, hbKey = '';
   const DATA = () => merged || window.CHARDATA || EMPTY;
-  // Campaign homebrew (spells and magic items) joins the SRD lists; a homebrew entry wins over an SRD one with the same name.
+  // Campaign homebrew (spells, magic items, feats, backgrounds, subclasses) joins the SRD lists; a homebrew entry wins over
+  // an SRD one with the same name. Subclasses join their class's list (sc.cls).
   function setHomebrew(hb) {
     const key = JSON.stringify(hb || {});
     if (key === hbKey) return false;
     hbKey = key;
-    const base = window.CHARDATA || EMPTY;
-    merged = { ...base, spells: [...((hb && hb.spells) || []), ...base.spells], magicItems: [...((hb && hb.items) || []), ...base.magicItems] };
+    const base = window.CHARDATA || EMPTY, x = hb || {};
+    const join = (mine, srd) => { mine = (mine || []).map(m => ({ ...m, homebrew: true })); const names = new Set(mine.map(m => String(m.name).toLowerCase())); return [...mine, ...srd.filter(m => !names.has(m.name.toLowerCase()))]; };
+    const subs = (x.subclasses || []).filter(sc => sc && sc.name && Array.isArray(sc.features));
+    merged = { ...base, spells: [...(x.spells || []), ...base.spells], magicItems: [...(x.items || []), ...base.magicItems],
+      feats: join((x.feats || []).filter(f => f && f.name), base.feats),
+      backgrounds: join((x.backgrounds || []).filter(b => b && b.name).map(b => ({ abilities: [], feat: '', skills: [], tools: [], equipment: [], ...b })), base.backgrounds),
+      classes: base.classes.map(c => ({ ...c, subclasses: join(subs.filter(sc => String(sc.cls).toLowerCase() === c.name.toLowerCase()), c.subclasses) })) };
     return true;
   }
   const AB = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
@@ -323,6 +329,53 @@ window.CharSheet = (() => {
     const it = { id: uid(), name: label && !g ? label : nm, qty, equipped: false, attuned: false, bonus: 0, weight: null, notes: '' };
     if (g && (g.kind === 'weapon' || ((g.kind === 'armor' || g.kind === 'shield') && !model.sheet.items.some(x => x.equipped && (findGear(x.name) || {}).kind === g.kind)))) it.equipped = true;
     model.sheet.items.push(it);
+  }
+
+  // ---------- Levelling up ----------
+  // levelPlan() says what the next level of one of the character's classes brings; levelUp() makes the player's choices
+  // on the model. Shared by the sheet's ⬆ Level up dialog and the step-by-step guide (CharGuide.levelUp).
+  function levelPlan(model, partIdx = 0, live) {
+    const D = derive(model, live), part = D.parts[partIdx], c = part ? part.c : null;
+    if (D.lvl >= 20) return { D, blocked: 'Already level 20' };
+    if (!c) return { D, blocked: 'Pick a class from the list first (✏ Edit), or change the level by hand' };
+    const newLvl = part.lvl + 1, L = c.levels[newLvl - 1], avg = c.hitDie / 2 + 1 + D.md.con, subclass = part.subclass;
+    const needSub = !subclass && L.features.some(f => /Subclass$/i.test(f.name)) && !part.sub;
+    const feats = [...L.features.filter(f => !/Subclass( Feature)?$/i.test(f.name) || !subclass), ...(subclass ? subclass.features.filter(f => f.level === newLvl) : [])];
+    const asi = L.features.some(f => /^Ability Score Improvement$/i.test(f.name));
+    // The character after the level, to show what changes (spell slots, how many spells).
+    const after = JSON.parse(JSON.stringify(model));
+    after.level = D.lvl + 1;
+    if (!part.primary) after.sheet.multi.find(x => x.id === part.id).level++;
+    return { D, A: derive(after, live), part, partIdx, c, newLvl, L, avg, feats, asi, needSub };
+  }
+  // choice: { rolled (HP gained from a roll, or null for the average), subclass, asi: {mode: 'two'|'split'|'feat', a, b, feat}, spells: [names] }
+  function levelUp(model, P, ch = {}) {
+    const { D, part, c, newLvl, avg, asi, needSub } = P, s = model.sheet, oldMax = D.maxHp;
+    model.level = D.lvl + 1;
+    if (!part.primary) { const x = s.multi.find(y => y.id === part.id); if (x) x.level++; }
+    // HP: Auto uses the average. A roll switches max HP to a typed number.
+    const rolled = ch.rolled != null ? Math.max(1, num(ch.rolled, 1)) : null, gain = rolled != null ? rolled : avg;
+    if (rolled != null && s.auto.hp) { s.auto.hp = false; model.hp = (oldMax || 0) + gain; }
+    else if (!s.auto.hp) model.hp = num(model.hp, 0) + gain;
+    let features = P.feats.map(f => f.name), sub = String(ch.subclass || '').trim();
+    if (needSub && sub) {
+      const sc = byName(c.subclasses, sub);
+      if (part.primary) s.subclass = sc ? sc.name : sub; else s.multi.find(y => y.id === part.id).subclass = sc ? sc.name : sub;
+      if (sc) features = [...features.filter(n => !/Subclass$/i.test(n)), ...sc.features.filter(f => f.level === newLvl).map(f => f.name)];
+    }
+    let asiText = '';
+    const a = ch.asi, up = (k, n) => { if (AB.includes(k)) s.abilities[k] = Math.min(20, s.abilities[k] + n); };
+    if (asi && a) {
+      if (a.mode === 'two' && AB.includes(a.a)) { up(a.a, 2); asiText = `+2 ${AB_NAME[a.a]}`; }
+      else if (a.mode === 'split' && AB.includes(a.a) && AB.includes(a.b)) { up(a.a, 1); up(a.b, 1); asiText = `+1 ${AB_NAME[a.a]}, +1 ${AB_NAME[a.b]}`; }
+      else if (a.mode === 'feat' && String(a.feat || '').trim()) { const f = findFeat(a.feat), n = f ? f.name : String(a.feat).trim().slice(0, 80); s.feats.push({ id: uid(), name: n, desc: '', uses: 0, used: 0 }); asiText = `Feat: ${n}`; }
+    }
+    const spells = [];
+    (ch.spells || []).forEach(n => {
+      const d = findSpell(n);
+      if (d && !s.spells.some(x => x.name.toLowerCase() === d.name.toLowerCase())) { s.spells.push({ id: uid(), name: d.name, level: d.level, prepared: d.level > 0, desc: '' }); spells.push(d.name); }
+    });
+    return { gain, rolled: rolled != null, asiText, newLvl, cls: c.name, features, spells };
   }
 
   // ---------- The interactive sheet ----------
@@ -706,24 +759,16 @@ window.CharSheet = (() => {
 
     // ---------- Level up ----------
     function levelUpDialog(partIdx = 0) {
-      if (D.lvl >= 20) return toast('Already level 20');
-      const part = D.parts[partIdx], c = part.c;
-      if (!c) return toast('Pick a class from the list first (✏ Edit), or change the level by hand');
-      const newLvl = part.lvl + 1, L = c.levels[newLvl - 1], avg = c.hitDie / 2 + 1 + D.md.con;
-      const subclass = part.subclass;
-      const feats = [...L.features.filter(f => !/Subclass( Feature)?$/i.test(f.name) || !subclass), ...(subclass ? subclass.features.filter(f => f.level === newLvl) : [])];
-      const asi = L.features.some(f => /^Ability Score Improvement$/i.test(f.name));
-      const needSub = !subclass && L.features.some(f => /Subclass$/i.test(f.name)) && !part.sub;
-      // What spellcasting looks like after the level, to show the difference.
-      const after = JSON.parse(JSON.stringify(model));
-      if (part.primary) after.level = D.lvl + 1; else { after.level = D.lvl + 1; after.sheet.multi.find(x => x.id === part.id).level++; }
-      const A2 = derive(after, live);
+      const P = levelPlan(model, partIdx, live);
+      if (P.blocked) return toast(P.blocked);
+      const { part, c, newLvl, avg, feats, asi, needSub, A: A2 } = P;
       const slotLine = (x) => x.slots.map(sl => `${sl.max}×${ord(sl.level)}`).join(', ') + (x.pact ? ` + Pact ${x.pact.max}×${ord(x.pact.level)}` : '');
       const spellNote = slotLine(A2) !== slotLine(D) ? `Spell slots: ${slotLine(D) || 'none'} → <b>${slotLine(A2)}</b>` : '';
       const countNote = A2.counts.cantrips !== D.counts.cantrips || A2.counts.prepared !== D.counts.prepared ? `Cantrips ${D.counts.cantrips} → <b>${A2.counts.cantrips}</b> · Prepared spells ${D.counts.prepared} → <b>${A2.counts.prepared}</b>` : '';
       let rolled = null;
       const abilSel = (cls) => `<select class="${cls}">${AB.map(a => `<option value="${a}">${AB_NAME[a]} (${D.score[a]})</option>`).join('')}</select>`;
       dialog(`<h3>Level up to ${D.lvl + 1}</h3>
+        ${window.CharGuide && CharGuide.levelUp ? `<button class="cs-btn big cs-lvguide" data-do="guide">✨ Walk me through it, step by step</button>` : ''}
         ${D.multi ? `<div class="cs-seg" data-part>${D.parts.map((x, i) => `<button data-do="part" data-i="${i}" class="${i === partIdx ? 'on' : ''}">${esc(x.c ? x.c.name : x.name)} ${x.lvl} → ${x.lvl + (i === partIdx ? 1 : 0)}</button>`).join('')}</div>` : `<p class="cs-hint">${esc(c.name)} ${part.lvl} → ${newLvl}</p>`}
         <div class="cs-card"><h4>Hit points</h4><div class="cs-seg" data-hp><button data-do="hp" data-v="avg" class="on">Take the average (+${avg})</button><button data-do="hp" data-v="roll">Roll 1d${c.hitDie}${sgn(D.md.con)}</button></div><div class="cs-hint cs-hproll"></div></div>
         ${needSub ? `<div class="cs-card"><h4>Choose your subclass</h4><input class="cs-newsub" list="cs-dl-lvsub" placeholder="${esc(c.subclasses[0] ? c.subclasses[0].name : 'Subclass')}">${datalist('cs-dl-lvsub', c.subclasses.map(x => x.name))}
@@ -736,6 +781,7 @@ window.CharSheet = (() => {
         ${spellNote || countNote ? `<p class="cs-hint">${[spellNote, countNote].filter(Boolean).join('<br>')}</p>` : ''}
         <button class="cs-btn primary big" data-do="go">⬆ Level up</button>`, (act, b, box) => {
         if (act === 'part') return levelUpDialog(Number(b.dataset.i));
+        if (act === 'guide') { closeDialog(); return openLevelGuide(partIdx); }
         if (act === 'hp' || act === 'asi') { b.parentElement.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); }
         if (act === 'hp') {
           if (b.dataset.v === 'roll') { const r = rollDice(`1d${c.hitDie}${D.md.con ? sgn(D.md.con) : ''}`); rolled = Math.max(1, r.total); box.querySelector('.cs-hproll').textContent = `Rolled ${r.detail}: +${rolled} HP`; }
@@ -744,26 +790,18 @@ window.CharSheet = (() => {
         }
         if (act === 'asi') { ['two', 'split', 'feat'].forEach(k => { box.querySelector('.cs-asi-' + k).hidden = k !== b.dataset.v; }); return; }
         if (act !== 'go') return;
-        const s = model.sheet, oldMax = D.maxHp;
-        model.level = D.lvl + 1;
-        if (!part.primary) { const x = s.multi.find(y => y.id === part.id); if (x) x.level++; }
-        // HP: Auto uses the average. A roll switches max HP to a typed number.
-        const gain = rolled != null ? rolled : avg;
-        if (rolled != null && s.auto.hp) { s.auto.hp = false; model.hp = (oldMax || 0) + gain; }
-        else if (!s.auto.hp) model.hp = (num(model.hp, 0)) + gain;
-        if (needSub) { const v = box.querySelector('.cs-newsub').value.trim(); if (v) { const sc = byName(c.subclasses, v); if (part.primary) s.subclass = sc ? sc.name : v; else s.multi.find(y => y.id === part.id).subclass = sc ? sc.name : v; } }
-        let asiText = '';
-        if (asi) {
-          const mode = box.querySelector('[data-asi] .on').dataset.v, up = (a, n) => { s.abilities[a] = Math.min(20, s.abilities[a] + n); };
-          if (mode === 'two') { const a = box.querySelector('.cs-a1').value; up(a, 2); asiText = `+2 ${AB_NAME[a]}`; }
-          else if (mode === 'split') { const a = box.querySelector('.cs-b1').value, b2 = box.querySelector('.cs-b2').value; up(a, 1); up(b2, 1); asiText = `+1 ${AB_NAME[a]}, +1 ${AB_NAME[b2]}`; }
-          else { const v = box.querySelector('.cs-newfeat').value.trim(); if (v) { const f = findFeat(v); s.feats.push({ id: uid(), name: f ? f.name : v, desc: '', uses: 0, used: 0 }); asiText = `Feat: ${f ? f.name : v}`; } }
-        }
+        const mode = asi ? box.querySelector('[data-asi] .on').dataset.v : '';
+        const r = levelUp(model, P, { rolled, subclass: needSub ? box.querySelector('.cs-newsub').value : '',
+          asi: !asi ? null : mode === 'two' ? { mode, a: box.querySelector('.cs-a1').value } : mode === 'split' ? { mode, a: box.querySelector('.cs-b1').value, b: box.querySelector('.cs-b2').value } : { mode, feat: box.querySelector('.cs-newfeat').value } });
         commit(); closeDialog();
-        toast(`Level ${model.level}! +${gain} HP`);
-        share({ kind: 'card', title: `${name || 'A player'} reached level ${model.level}`, sub: `${c.name} ${newLvl} · +${gain} HP${rolled != null ? ' (rolled)' : ''}`,
-          body: [feats.length ? `**New:** ${feats.map(f => f.name).join(', ')}` : '', asiText].filter(Boolean).join('\n') });
+        levelledUp(r);
       });
+    }
+    // After either way of levelling up: tell the player, and the DM.
+    function levelledUp(r) {
+      toast(`Level ${model.level}! +${r.gain} HP`);
+      share({ kind: 'card', title: `${name || 'A player'} reached level ${model.level}`, sub: `${r.cls} ${r.newLvl} · +${r.gain} HP${r.rolled ? ' (rolled)' : ''}`,
+        body: [r.features.length ? `**New:** ${r.features.join(', ')}` : '', r.asiText, r.spells.length ? `**Spells:** ${r.spells.join(', ')}` : ''].filter(Boolean).join('\n') });
     }
 
     // The character's picture: tap it to see it big; in ✏ Edit, choose or remove one.
@@ -983,9 +1021,15 @@ window.CharSheet = (() => {
       if (!window.CharGuide) return;
       CharGuide.open({ ...model, name }, { onDone: (m) => { model = m; edit = false; tab = 'main'; commit(); window.scrollTo(0, 0); toast(`${name || 'Your character'} is ready!`); } });
     }
+    // ✨ The level-up guide: the same choices as the dialog, one step at a time with explanations.
+    function openLevelGuide(partIdx = 0) {
+      if (!window.CharGuide || !CharGuide.levelUp) return levelUpDialog(partIdx);
+      CharGuide.levelUp({ ...model, name }, { part: partIdx, live, onDone: (m, r) => { model = m; commit(); levelledUp(r); } });
+    }
 
     const api = {
       guide: openGuide,
+      levelUp: openLevelGuide,
       // New data from outside (the DM app, or the player's phone). Waits while someone is typing in the sheet.
       set(m, l) {
         if (root.contains(document.activeElement) && document.activeElement.matches('input, textarea, select')) { pending = { model: m, live: l }; live = l; renderHead(); return; }
@@ -1136,5 +1180,5 @@ window.CharSheet = (() => {
   }
   const fileName = (name) => `${String(name || 'Character').replace(/[\\/:*?"<>|]/g, '').trim() || 'Character'}.ddchar.json`;
 
-  return { mount, setHomebrew, printHtml, addItemTo, data: DATA, AB, AB_NAME, ALIGN, BIO, derive, clean, prepare, applyAuto, cleanShare, resolve, rollDice, feedHtml, fmt, toFile, fromFile, fileName, toLink, fromLink, SHEET_URL, printable, readFile, FILE_TYPES };
+  return { mount, setHomebrew, printHtml, addItemTo, levelPlan, levelUp, data: DATA, AB, AB_NAME, ALIGN, BIO, derive, clean, prepare, applyAuto, cleanShare, resolve, rollDice, feedHtml, fmt, toFile, fromFile, fileName, toLink, fromLink, SHEET_URL, printable, readFile, FILE_TYPES };
 })();

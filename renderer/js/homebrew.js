@@ -1,6 +1,6 @@
-// Homebrew: your own monsters, spells and magic items, stored as notes inside the campaign
-// (Homebrew/Monsters, Homebrew/Spells, Homebrew/Items). They show up in the Rules reference,
-// the encounter builder, initiative and the loot generator alongside the SRD.
+// Homebrew: your own monsters, spells, magic items, feats, backgrounds and subclasses, stored as notes inside the campaign
+// (Homebrew/Monsters, Spells, Items, Feats, Backgrounds, Subclasses). They show up in the Rules reference, the encounter
+// builder, initiative and the loot generator alongside the SRD, and feats, backgrounds and subclasses in character sheets.
 window.Homebrew = (() => {
   const { h, toast } = U;
   const SCHOOLS = ['Abjuration', 'Conjuration', 'Divination', 'Enchantment', 'Evocation', 'Illusion', 'Necromancy', 'Transmutation'];
@@ -8,6 +8,10 @@ window.Homebrew = (() => {
   const ITEM_TYPES = ['Wondrous Item', 'Weapon', 'Armor', 'Potion', 'Ring', 'Rod', 'Scroll', 'Staff', 'Wand', 'Shield', 'Ammunition'];
   const yaml = (v) => /^[\w .,'()/+-]*$/.test(String(v)) && !/^\s|\s$/.test(String(v)) && String(v) !== '' ? String(v) : JSON.stringify(String(v));
   const truthy = (v) => v === true || /^(yes|true|y|1)$/i.test(String(v || ''));
+  const FEAT_TYPES = { origin: 'Origin', general: 'General', 'fighting-style': 'Fighting Style', 'epic-boon': 'Epic Boon' };
+  const CLASSES = ['Barbarian', 'Bard', 'Cleric', 'Druid', 'Fighter', 'Monk', 'Paladin', 'Ranger', 'Rogue', 'Sorcerer', 'Warlock', 'Wizard'];
+  const AB_NAME = { str: 'Strength', dex: 'Dexterity', con: 'Constitution', int: 'Intelligence', wis: 'Wisdom', cha: 'Charisma' };
+  const list_ = (v) => Array.isArray(v) ? v.map(String) : String(v || '').split(/,\s*/).filter(Boolean);
   const levelText = (l, school) => Number(l) === 0 ? `${school} Cantrip` : `Level ${l} ${school}`;
 
   // ----- Writing notes -----
@@ -65,9 +69,94 @@ ${blurb ? blurb.trim() + '\n\n' : '*Describe this creature and where it lurks.*\
 -
 `;
   }
-  const folder = { monster: 'Homebrew/Monsters', spell: 'Homebrew/Spells', item: 'Homebrew/Items' };
+  function featNote(f) {
+    const type = FEAT_TYPES[f.type] ? f.type : 'general';
+    return `---
+type: feat
+tags: [feat, homebrew]
+feat_type: ${type}
+prerequisite: ${f.prereq ? yaml(f.prereq) : ''}
+source: ${yaml(f.source || 'Homebrew')}
+---
+# ${f.name}
+
+*${FEAT_TYPES[type]} Feat${f.prereq ? ` (Prerequisite: ${f.prereq})` : ''}*
+
+${(f.desc || '').trim()}
+`;
+  }
+  // equipment is the book's text ("Choose A or B: (A) …, 8 GP; or (B) 50 GP"); list() turns it into the sheet's choices.
+  function backgroundNote(b) {
+    const abil = (b.abilities || []).filter(a => AB_NAME[a]);
+    return `---
+type: background
+tags: [background, homebrew]
+abilities: [${abil.join(', ')}]
+feat: ${b.feat ? yaml(b.feat) : ''}
+skills: [${(b.skills || []).map(yaml).join(', ')}]
+tools: [${(b.tools || []).map(yaml).join(', ')}]
+equipment: ${b.equipment ? yaml(b.equipment) : ''}
+source: ${yaml(b.source || 'Homebrew')}
+---
+# ${b.name}
+
+${abil.length ? `**Ability Scores:** ${abil.map(a => AB_NAME[a]).join(', ')}  \n` : ''}${b.feat ? `**Feat:** ${b.feat}  \n` : ''}${(b.skills || []).length ? `**Skill Proficiencies:** ${b.skills.join(', ')}  \n` : ''}${(b.tools || []).length ? `**Tool Proficiency:** ${b.tools.join(', ')}  \n` : ''}${b.equipment ? `**Equipment:** ${b.equipment}` : ''}
+
+${(b.desc || '').trim()}
+`;
+  }
+  // Each feature is a "## Level 3: Name" section, which list() reads back.
+  function subclassNote(sc) {
+    return `---
+type: subclass
+tags: [subclass, homebrew]
+class: ${yaml(sc.cls || 'Fighter')}
+summary: ${sc.summary ? yaml(sc.summary) : ''}
+source: ${yaml(sc.source || 'Homebrew')}
+---
+# ${sc.name}
+
+*${sc.cls || 'Fighter'} Subclass${sc.summary ? `: ${sc.summary}` : ''}*
+
+${(sc.desc || '').trim()}
+
+${(sc.features || []).map(f => `## Level ${f.level}: ${f.name}\n\n${String(f.desc || '').trim()}\n`).join('\n')}`;
+  }
+  // "## Level 3: Name" sections → [{level, name, desc}]. A section without a level counts as level 3.
+  function subclassFeatures(text) {
+    return ('\n' + String(text || '')).split(/\n##\s+/).slice(1).map(p => {
+      const x = p.match(/^(?:Level\s+(\d+)\s*[:.\-–—]\s*)?(.+)\n?([\s\S]*)$/i);
+      return x ? { level: Number(x[1]) || 3, name: x[2].trim(), desc: x[3].trim() } : null;
+    }).filter(Boolean);
+  }
+  // "(A) Dagger, 2 Pouches, 8 GP; or (B) 50 GP" → [{desc, choices: [{label, items: [{name, ref, count}], gp}]}], the shape CHARDATA uses.
+  function equipChoices(text) {
+    const t = String(text || '').trim();
+    if (!t) return [];
+    const parts = t.replace(/^choose\s+[a-c](\s+or\s+[a-c])?:\s*/i, '').split(/\(([A-C])\)\s*/);
+    const opts = parts.length > 2 ? [] : [['A', t]];
+    for (let i = 1; i < parts.length; i += 2) opts.push([parts[i], parts[i + 1] || '']);
+    const choices = opts.map(([label, txt]) => {
+      let gp = 0;
+      const items = [];
+      txt.replace(/[;,.]?\s*or\s*$/i, '').split(/,\s*|\s+and\s+/).forEach(x => {
+        x = x.trim().replace(/[.;]+$/, '').replace(/^(and|or)\s+/i, '');
+        if (!x) return;
+        const g = x.match(/^(\d+)\s*GP$/i);
+        if (g) { gp += Number(g[1]); return; }
+        const c = x.match(/^(\d+)\s+(.+)$/), name = c ? c[2] : x;
+        // "2 Pouches" is the SRD's "Pouch".
+        const ref = name.replace(/\s*\(.*\)$/, ''), one = c && Number(c[1]) > 1 ? ref.replace(/(ch|sh|ss|x)es$/i, '$1').replace(/([^s])s$/i, '$1') : ref;
+        items.push({ name, ref: one, count: c ? Number(c[1]) : 1 });
+      });
+      return { label, items, gp };
+    });
+    return [{ desc: t, choices }];
+  }
+  const folder = { monster: 'Homebrew/Monsters', spell: 'Homebrew/Spells', item: 'Homebrew/Items', feat: 'Homebrew/Feats', background: 'Homebrew/Backgrounds', subclass: 'Homebrew/Subclasses' };
+  const NOTE = { spell: spellNote, item: itemNote, feat: featNote, background: backgroundNote, subclass: subclassNote };
   async function save(kind, obj, { open = true, source, blurb } = {}) {
-    const content = kind === 'spell' ? spellNote(obj) : kind === 'item' ? itemNote(obj) : monsterNote(obj, source || obj.source || 'Homebrew', blurb);
+    const content = NOTE[kind] ? NOTE[kind]({ ...obj, source: source || obj.source }) : monsterNote(obj, source || obj.source || 'Homebrew', blurb);
     if (window.Library) Library.soon(3000);   // into the homebrew library, for every campaign
     if (open) return Notes.create(obj.name, content, null, folder[kind]);
     const path = await Notes.uniquePath(folder[kind], obj.name);
@@ -78,7 +167,7 @@ ${blurb ? blurb.trim() + '\n\n' : '*Describe this creature and where it lurks.*\
   // ----- Reading them back for the Rules reference / loot -----
   function list() {
     const cache = Notes.notesCache();
-    const spells = [], items = [];
+    const spells = [], items = [], feats = [], backgrounds = [], subclasses = [];
     for (const n of Notes.list()) {
       const content = cache.get(n.path) || '';
       const { meta, body } = MD.splitFrontmatter(content);
@@ -89,12 +178,24 @@ ${blurb ? blurb.trim() + '\n\n' : '*Describe this creature and where it lurks.*\
         classes: Array.isArray(meta.classes) ? meta.classes.map(String) : String(meta.classes || '').split(/,\s*/).filter(Boolean), source: meta.source || 'Homebrew', desc, higher: '' });
       if (meta.type === 'item') items.push({ name: n.name, path: n.path, rarity: String(meta.rarity || 'Uncommon'), type: meta.item_type || 'Wondrous Item',
         attune: meta.attunement && meta.attunement !== 'false' ? meta.attunement : false, source: meta.source || 'Homebrew', desc });
+      // Feats, backgrounds and subclasses come out in the shape of CHARDATA's, so character sheets can use them as they are.
+      if (meta.type === 'feat') feats.push({ name: n.name, path: n.path, type: FEAT_TYPES[meta.feat_type] ? meta.feat_type : 'general', prereq: meta.prerequisite ? String(meta.prerequisite) : '', source: meta.source || 'Homebrew', desc });
+      if (meta.type === 'background') {
+        const bodyText = body.replace(/^#\s.*\n+/, '').replace(/^\*\*(Ability Scores|Feat|Skill Proficiencies|Tool Proficienc\w*|Equipment):\*\*.*\n?/gim, '').trim();
+        backgrounds.push({ name: n.name, path: n.path, abilities: list_(meta.abilities).map(a => a.toLowerCase().slice(0, 3)).filter(a => AB_NAME[a]), feat: meta.feat ? String(meta.feat) : '',
+          skills: list_(meta.skills), tools: list_(meta.tools), equipment: equipChoices(meta.equipment), equipText: meta.equipment ? String(meta.equipment) : '', source: meta.source || 'Homebrew', desc: bodyText });
+      }
+      if (meta.type === 'subclass') {
+        const intro = body.split(/^##\s/m)[0];
+        subclasses.push({ name: n.name, path: n.path, cls: String(meta.class || ''), summary: meta.summary ? String(meta.summary) : '', features: subclassFeatures(body),
+          source: meta.source || 'Homebrew', desc: intro.replace(/^#\s.*\n+/, '').replace(/^\*[^*\n]+\*\s*\n+/, '').trim() });
+      }
     }
     const monsters = Notes.withStatblocks().map(b => {
       const { meta } = MD.splitFrontmatter(cache.get(b.note.path) || '');
       return { ...b.sb, name: b.sb.name || b.note.name, _note: b.note.name, _path: b.note.path, _source: (meta && meta.source) || 'My bestiary' };
     });
-    return { monsters, spells, items };
+    return { monsters, spells, items, feats, backgrounds, subclasses };
   }
 
   // ----- "New homebrew" dialogs -----
@@ -102,7 +203,60 @@ ${blurb ? blurb.trim() + '\n\n' : '*Describe this creature and where it lurks.*\
     const m = U.modal('New homebrew', h('div.template-grid',
       h('button.template-card', { onclick: () => { m.close(); Statblock.openBuilder({ name: 'New Monster' }, (sb) => save('monster', sb)); } }, h('span', '🐉'), 'Monster'),
       h('button.template-card', { onclick: () => { m.close(); spellForm(); } }, h('span', '✨'), 'Spell'),
-      h('button.template-card', { onclick: () => { m.close(); itemForm(); } }, h('span', '💎'), 'Magic item')));
+      h('button.template-card', { onclick: () => { m.close(); itemForm(); } }, h('span', '💎'), 'Magic item'),
+      h('button.template-card', { onclick: () => { m.close(); featForm(); } }, h('span', '🎖'), 'Feat'),
+      h('button.template-card', { onclick: () => { m.close(); backgroundForm(); } }, h('span', '📜'), 'Background'),
+      h('button.template-card', { onclick: () => { m.close(); subclassForm(); } }, h('span', '🧬'), 'Subclass')));
+  }
+  const saveRow = (close, label, go) => h('div.row.end', h('button', { onclick: close }, 'Cancel'), h('button.primary', { onclick: go }, label));
+  function featForm(ft = {}, onSave = (x) => save('feat', x)) {
+    const f = { name: h('input', { value: ft.name || '' }), type: h('select', Object.entries(FEAT_TYPES).map(([k, v]) => h('option', { value: k, selected: k === (ft.type || 'general') }, v))),
+      prereq: h('input', { value: ft.prereq || '', placeholder: 'Level 4+' }), desc: h('textarea', { rows: 9, value: ft.desc || '' }) };
+    const m = U.modal(ft.name ? `Feat: ${ft.name}` : 'New feat', [
+      h('div.grid3', h('label.field.span2', h('span', 'Name'), f.name), h('label.field', h('span', 'Kind'), f.type)),
+      h('label.field', h('span', 'Prerequisite (optional)'), f.prereq),
+      h('label.field', h('span', 'What it does (markdown)'), f.desc),
+      saveRow(() => m.close(), '💾 Save feat', () => {
+        if (!f.name.value.trim()) return f.name.focus();
+        onSave({ name: f.name.value.trim(), type: f.type.value, prereq: f.prereq.value.trim(), desc: f.desc.value, source: ft.source });
+        m.close();
+      }),
+    ], { wide: true });
+  }
+  function backgroundForm(bg = {}, onSave = (x) => save('background', x)) {
+    const chk = (a) => h('input', { type: 'checkbox', checked: (bg.abilities || []).includes(a), 'data-a': a });
+    const abil = Object.keys(AB_NAME).map(chk);
+    const f = { name: h('input', { value: bg.name || '' }), feat: h('input', { value: bg.feat || '', placeholder: 'Alert' }), skills: h('input', { value: (bg.skills || []).join(', '), placeholder: 'Insight, Religion' }),
+      tools: h('input', { value: (bg.tools || []).join(', '), placeholder: 'Calligrapher\'s Supplies' }), equipment: h('textarea', { rows: 2, value: bg.equipText || bg.equipment || '', placeholder: '(A) Dagger, Robe, 8 GP; or (B) 50 GP' }), desc: h('textarea', { rows: 5, value: bg.desc || '' }) };
+    const split = (v) => v.split(',').map(x => x.trim()).filter(Boolean);
+    const m = U.modal(bg.name ? `Background: ${bg.name}` : 'New background', [
+      h('label.field', h('span', 'Name'), f.name),
+      h('div.field', h('span', 'Ability scores it raises (pick three)'), h('div.row', abil.map(c => h('label.chk', c, ' ' + AB_NAME[c.dataset.a])))),
+      h('div.grid3', h('label.field', h('span', 'Feat'), f.feat), h('label.field', h('span', 'Skills'), f.skills), h('label.field', h('span', 'Tools'), f.tools)),
+      h('label.field', h('span', 'Equipment'), f.equipment),
+      h('label.field', h('span', 'Description (markdown)'), f.desc),
+      saveRow(() => m.close(), '💾 Save background', () => {
+        if (!f.name.value.trim()) return f.name.focus();
+        onSave({ name: f.name.value.trim(), abilities: abil.filter(c => c.checked).map(c => c.dataset.a), feat: f.feat.value.trim(), skills: split(f.skills.value), tools: split(f.tools.value),
+          equipment: f.equipment.value.trim(), desc: f.desc.value, source: bg.source });
+        m.close();
+      }),
+    ], { wide: true });
+  }
+  function subclassForm(sc = {}, onSave = (x) => save('subclass', x)) {
+    const feats = (sc.features || []).map(x => `## Level ${x.level}: ${x.name}\n${x.desc}`).join('\n\n');
+    const f = { name: h('input', { value: sc.name || '' }), cls: h('select', CLASSES.map(c => h('option', { selected: c === sc.cls }, c))), summary: h('input', { value: sc.summary || '', placeholder: 'One line: what this subclass is about' }),
+      desc: h('textarea', { rows: 3, value: sc.desc || '' }), features: h('textarea', { rows: 12, value: feats, placeholder: '## Level 3: Feature name\nWhat it does.\n\n## Level 6: Another feature\nWhat it does.' }) };
+    const m = U.modal(sc.name ? `Subclass: ${sc.name}` : 'New subclass', [
+      h('div.grid3', h('label.field.span2', h('span', 'Name'), f.name), h('label.field', h('span', 'Class'), f.cls)),
+      h('label.field', h('span', 'Summary'), f.summary), h('label.field', h('span', 'Description (optional)'), f.desc),
+      h('label.field', h('span', 'Features: one “## Level N: Name” line each, then what it does'), f.features),
+      saveRow(() => m.close(), '💾 Save subclass', () => {
+        if (!f.name.value.trim()) return f.name.focus();
+        onSave({ name: f.name.value.trim(), cls: f.cls.value, summary: f.summary.value.trim(), desc: f.desc.value, features: subclassFeatures(f.features.value), source: sc.source });
+        m.close();
+      }),
+    ], { wide: true });
   }
   function spellForm(sp = {}, onSave = (x) => save('spell', x)) {
     const f = {
@@ -144,5 +298,5 @@ ${blurb ? blurb.trim() + '\n\n' : '*Describe this creature and where it lurks.*\
     ], { wide: true });
   }
 
-  return { save, list, newDialog, spellForm, itemForm, spellNote, itemNote, monsterNote, levelText, SCHOOLS, RARITIES };
+  return { save, list, newDialog, spellForm, itemForm, featForm, backgroundForm, subclassForm, spellNote, itemNote, monsterNote, featNote, backgroundNote, subclassNote, equipChoices, subclassFeatures, levelText, SCHOOLS, RARITIES, FEAT_TYPES, CLASSES };
 })();

@@ -193,7 +193,7 @@ window.Library = (() => {
     cardEl.innerHTML = '';
     const signedIn = window.Cloud && Cloud.user();
     cardEl.append(h('h3', '📚 Homebrew library'),
-      h('p', `Your homebrew monsters, spells and items are shared by all your campaigns${signedIn ? ', on every device you sign in on' : ' on this device'}. Make or import homebrew in any campaign and it's in all of them; edit or delete it in one and the others follow.`),
+      h('p', `Your homebrew (monsters, spells, items, feats, backgrounds and subclasses) is shared by all your campaigns${signedIn ? ', on every device you sign in on' : ' on this device'}. Make or import homebrew in any campaign and it's in all of them; edit or delete it in one and the others follow.`),
       h('p.dim.small', `${stats.count} note${stats.count === 1 ? '' : 's'} in the library. ${busy ? 'Syncing…' : lastError ? '' : lastSync ? 'Up to date.' : ''}`, lastError ? h('span.err-text', ` ⚠ ${lastError}`) : null),
       signedIn ? null : h('p.dim.small', 'Sign in under ☁ Cloud sync to keep it in your account too, so the phone app and your other computers have it.'),
       h('p.dim.small', 'Who you share a note with stays per campaign. To keep a note in one campaign only, add ', h('code', 'library: false'), ' to its properties.'),
@@ -204,5 +204,5 @@ window.Library = (() => {
       h('div.row', h('button', { onclick: () => syncNow() }, '↻ Sync now'), dm.isWeb ? null : h('button', { onclick: () => dm.library.reveal() }, '📂 Open library folder')));
   }
 
-  return { init, card, syncNow, soon, plan, cloudPlan, splitShare, withShare, optedOut, hash, CLOUD_ID };
+  return { init, card, syncNow, soon, plan, cloudPlan, cloudSync, splitShare, withShare, optedOut, hash, CLOUD_ID };
 })();

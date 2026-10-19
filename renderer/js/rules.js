@@ -1,9 +1,10 @@
-// Rules reference: search SRD monsters, spells, conditions, magic items and rules sections.
+// Rules reference: search SRD monsters, spells, conditions, magic items, character options (feats, backgrounds,
+// subclasses) and rules sections.
 window.Rules = (() => {
   const { h, esc, toast } = U;
   const R = window.SRDREF;
-  const CATS = { all: 'All', monsters: 'Monsters', spells: 'Spells', conditions: 'Conditions', items: 'Magic items', rules: 'Rules' };
-  const ICON = { monsters: '🐉', spells: '✨', conditions: '🌀', items: '💎', rules: '📏' };
+  const CATS = { all: 'All', monsters: 'Monsters', spells: 'Spells', conditions: 'Conditions', items: 'Magic items', options: 'Feats & more', rules: 'Rules' };
+  const ICON = { monsters: '🐉', spells: '✨', conditions: '🌀', items: '💎', options: '🎖', rules: '📏' };
   let cat = 'all', source = 'all', els = {}, selected = null;
   const LEVEL = (l) => l === 0 ? 'Cantrip' : `Level ${l}`;
 
@@ -14,19 +15,32 @@ window.Rules = (() => {
       ...hb.monsters.map(x => ({ cat: 'monsters', hb: true, name: x.name, sub: `CR ${x.cr ?? '?'} ${x.size || ''} ${x.type || ''} · ${x._source}`, x })),
       ...hb.spells.map(x => ({ cat: 'spells', hb: true, name: x.name, sub: `${LEVEL(x.level)} ${x.school} · ${x.source}`, x })),
       ...hb.items.map(x => ({ cat: 'items', hb: true, name: x.name, sub: `${x.rarity} ${x.type} · ${x.source}`, x })),
+      ...options(hb, true),
     ];
   };
+  // Feats, backgrounds and subclasses: the 2024 SRD ones the character sheet knows (CHARDATA), or the campaign's.
+  const FEAT_KIND = (t) => (Homebrew.FEAT_TYPES[t] || 'General') + ' feat';
+  function options(src, hb) {
+    const subs = hb ? src.subclasses : src.classes.flatMap(c => c.subclasses.map(sc => ({ ...sc, cls: c.name })));
+    const tail = (x) => hb ? ` · ${x.source}` : '';
+    return [
+      ...src.feats.map(x => ({ cat: 'options', kind: 'feat', hb, name: x.name, sub: FEAT_KIND(x.type) + (x.prereq ? ` · ${x.prereq}` : '') + tail(x), x })),
+      ...src.backgrounds.map(x => ({ cat: 'options', kind: 'background', hb, name: x.name, sub: 'Background' + tail(x), x })),
+      ...subs.map(x => ({ cat: 'options', kind: 'subclass', hb, name: x.name, sub: `${x.cls} subclass` + tail(x), x })),
+    ];
+  }
   const all = () => [
     ...R.monsters.map(x => ({ cat: 'monsters', name: x.name, sub: `CR ${x.cr} ${x.size} ${x.type}`, x })),
     ...R.spells.map(x => ({ cat: 'spells', name: x.name, sub: `${LEVEL(x.level)} ${x.school}${x.conc ? ' · C' : ''}${x.ritual ? ' · R' : ''}`, x })),
     ...R.conditions.map(x => ({ cat: 'conditions', name: x.name, sub: 'Condition', x })),
     ...R.items.map(x => ({ cat: 'items', name: x.name, sub: `${x.rarity} ${x.type}`, x })),
+    ...(window.CHARDATA ? options(CHARDATA, false) : []),
     ...R.rules.map(x => ({ cat: 'rules', name: x.name, sub: 'Rules (SRD 5.1)', x })),
   ];
   let index = null;
 
   function mount(root) {
-    els.q = h('input.search', { placeholder: 'Search monsters, spells, conditions, items, rules…', oninput: draw });
+    els.q = h('input.search', { placeholder: 'Search monsters, spells, items, feats, rules…', oninput: draw });
     els.cats = h('div.tabs', Object.entries(CATS).map(([k, v]) => h('button.tab' + (k === cat ? '.on' : ''), { 'data-c': k, onclick: () => { cat = k; U.$$('.tab', els.cats).forEach(b => b.classList.toggle('on', b.dataset.c === k)); drawFilters(); draw(); } }, v)));
     els.filters = h('div.row.ref-filters');
     els.list = h('div.ref-list');
@@ -35,7 +49,7 @@ window.Rules = (() => {
     els.detail = h('div.ref-detail');
     root.append(h('div.page.page-flush', els.layout = h('div.ref-layout',
       h('aside.ref-side', h('div.ref-head',
-        h('div.row', h('h2', '📖 Rules'), h('span.grow'), h('button.small.primary', { onclick: Homebrew.newDialog, title: 'Create your own monster, spell or item' }, '+ Homebrew'), h('button.small', { onclick: () => Importer.open(), title: 'Paste from D&D Beyond / PDFs, search Open5e, import a file, or read a book PDF you own' }, '📥 Import')),
+        h('div.row', h('h2', '📖 Rules'), h('span.grow'), h('button.small.primary', { onclick: Homebrew.newDialog, title: 'Create your own monster, spell, item, feat, background or subclass' }, '+ Homebrew'), h('button.small', { onclick: () => Importer.open(), title: 'Paste from D&D Beyond / PDFs, search Open5e, import a file, or read a book PDF you own' }, '📥 Import')),
         els.q, els.sources, els.cats, els.filters), els.list,
         h('p.ref-attr', R.attribution)),
       els.detail)));
@@ -57,6 +71,10 @@ window.Rules = (() => {
       els.f.type = h('select', { onchange: draw }, h('option', { value: '' }, 'Any type'), Object.keys(SRD.TYPES).map(t => h('option', t)));
       els.filters.append(els.f.cr, els.f.type);
     }
+    if (cat === 'options') {
+      els.f.kind = h('select', { onchange: draw }, h('option', { value: '' }, 'Feats, backgrounds and subclasses'), h('option', { value: 'feat' }, 'Feats'), h('option', { value: 'background' }, 'Backgrounds'), h('option', { value: 'subclass' }, 'Subclasses'));
+      els.filters.append(els.f.kind);
+    }
     if (cat === 'items') {
       els.f.rarity = h('select', { onchange: draw }, h('option', { value: '' }, 'Any rarity'), ['Common', 'Uncommon', 'Rare', 'Very Rare', 'Legendary', 'Artifact'].map(r => h('option', r)));
       els.filters.append(els.f.rarity);
@@ -73,10 +91,11 @@ window.Rules = (() => {
     if (f.cls && f.cls.value) hits = hits.filter(e => e.x.classes.includes(f.cls.value));
     if (f.cr && f.cr.value) hits = hits.filter(e => String(e.x.cr) === f.cr.value);
     if (f.type && f.type.value) hits = hits.filter(e => String(e.x.type || '').toLowerCase().startsWith(f.type.value.toLowerCase()));
+    if (f.kind && f.kind.value) hits = hits.filter(e => e.kind === f.kind.value);
     if (f.rarity && f.rarity.value) hits = hits.filter(e => e.x.rarity.toLowerCase().includes(f.rarity.value.toLowerCase()));
     els.list.innerHTML = '';
     els.list.append(h('div.tree-label', `${hits.length} result${hits.length === 1 ? '' : 's'}`));
-    hits.slice(0, 300).forEach(e => els.list.append(h('div.ref-item' + (selected && selected.name === e.name && selected.cat === e.cat && !!selected.hb === !!e.hb ? '.active' : ''), { onclick: () => { selected = e; showDetail(e); draw(); } },
+    hits.slice(0, 300).forEach(e => els.list.append(h('div.ref-item' + (selected && selected.name === e.name && selected.cat === e.cat && selected.sub === e.sub && !!selected.hb === !!e.hb ? '.active' : ''), { onclick: () => { selected = e; showDetail(e); draw(); } },
       h('span.ref-icon', ICON[e.cat]), h('div', h('div', e.name, e.hb ? h('span.hb-star', ' ★') : null), h('div.dim.small', e.sub)))));
     if (!hits.length && source === 'hb') els.list.append(h('p.dim', 'No homebrew yet. Use “+ Homebrew” or “📥 Import”.'));
     if (hits.length > 300) els.list.append(h('p.dim.small', 'Showing the first 300 — refine the search.'));
@@ -120,6 +139,16 @@ window.Rules = (() => {
     } else if (e.cat === 'items') {
       els.detail.append(hbBar, h('div.spell-card', h('h1', x.name), h('div.spell-sub', `${x.type}, ${x.rarity}${x.attune ? ` (${typeof x.attune === 'string' ? x.attune : 'requires attunement'})` : ''}`), mdBlock(x.desc),
         h('div.row', copyBtn('✏ Copy to homebrew', () => Homebrew.itemForm({ ...x, source: 'SRD (modified)' })), h('button', { onclick: () => U.copy(`**${x.name}** (${x.type}, ${x.rarity})\n\n${x.desc}`) }, '📋 Copy'))));
+    } else if (e.cat === 'options') {
+      const AB_NAME = { str: 'Strength', dex: 'Dexterity', con: 'Constitution', int: 'Intelligence', wis: 'Wisdom', cha: 'Charisma' };
+      const edit = e.kind === 'feat' ? () => Homebrew.featForm({ ...x, source: 'SRD (modified)' }) : e.kind === 'background' ? () => Homebrew.backgroundForm({ ...x, equipText: (x.equipment || []).map(q => q.desc).join(' '), source: 'SRD (modified)' })
+        : () => Homebrew.subclassForm({ ...x, source: 'SRD (modified)' });
+      const props = e.kind === 'background' ? [['Ability Scores', (x.abilities || []).map(a => AB_NAME[a]).join(', ')], ['Feat', x.feat], ['Skill Proficiencies', (x.skills || []).join(', ')],
+        ['Tool Proficiency', (x.tools || []).join(', ')], ['Equipment', (x.equipment || []).map(q => q.desc).join(' ')]].filter(([, v]) => v) : [];
+      els.detail.append(hbBar, h('div.spell-card', h('h1', x.name), h('div.spell-sub', e.sub.replace(/ · [^·]*$/, e.hb ? '' : '$&')),
+        props.length ? h('div.spell-props', props.map(([k, v]) => h('div', h('b', k + ': '), v))) : null,
+        e.kind === 'subclass' ? [x.summary ? h('p', h('i', x.summary)) : null, x.desc ? mdBlock(x.desc) : null, (x.features || []).map(f => [h('h3', `Level ${f.level}: ${f.name}`), mdBlock(f.desc || '')])] : mdBlock(x.desc || ''),
+        h('div.row', copyBtn('✏ Copy to homebrew', edit))));
     } else {
       els.detail.append(h('div.spell-card', e.cat === 'conditions' ? h('h1', x.name) : null, mdBlock(x.desc)));
     }

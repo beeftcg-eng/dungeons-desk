@@ -110,9 +110,24 @@ function backupNow() {
   all.slice(BACKUPS_KEPT).forEach(d => fs.rm(path.join(backupRoot(), d), { recursive: true, force: true }, () => {}));
   return dest;
 }
+// The homebrew library is shared by every campaign, so it gets its own folder of daily copies (notes only, no sync state).
+const LIBRARY_BACKUPS = () => path.join(BACKUPS_DIR, '★ Homebrew Library');
+function backupLibrary() {
+  const src = path.join(LIBRARY_DIR, 'Homebrew');
+  if (!fs.existsSync(src)) return null;
+  const dest = path.join(LIBRARY_BACKUPS(), new Date().toISOString().slice(0, 16).replace('T', '_').replace(':', '-'), 'Homebrew');
+  fs.mkdirSync(dest, { recursive: true });
+  fs.cpSync(src, dest, { recursive: true });
+  config.libraryBackup = Date.now();
+  saveConfig();
+  const all = fs.readdirSync(LIBRARY_BACKUPS()).filter(d => /^\d{4}-/.test(d)).sort().reverse();
+  all.slice(BACKUPS_KEPT).forEach(d => fs.rm(path.join(LIBRARY_BACKUPS(), d), { recursive: true, force: true }, () => {}));
+  return dest;
+}
 function autoBackup() {
   const last = (config.backups || {})[path.resolve(config.vault)] || 0;
   if (Date.now() - last > 24 * 3600 * 1000) { try { backupNow(); } catch (e) { console.error('Backup failed', e); } }
+  if (Date.now() - (config.libraryBackup || 0) > 24 * 3600 * 1000) { try { backupLibrary(); } catch (e) { console.error('Library backup failed', e); } }
 }
 
 // ---------- Campaign list ----------
@@ -369,7 +384,7 @@ function registerIpc() {
   ipcMain.handle('history:read', (_e, rel, ts) => fs.readFileSync(path.join(historyDir(rel), Number(ts) + '.md'), 'utf8'));
   ipcMain.handle('history:snapshot', (_e, rel) => { snapshot(rel, { force: true }); return true; });
 
-  ipcMain.handle('backup:now', () => backupNow());
+  ipcMain.handle('backup:now', () => { try { backupLibrary(); } catch (e) { console.error('Library backup failed', e); } return backupNow(); });
   ipcMain.handle('backup:info', () => {
     let list = [];
     try { list = fs.readdirSync(backupRoot()).filter(d => /^\d{4}-/.test(d)).sort().reverse(); } catch { /* none yet */ }

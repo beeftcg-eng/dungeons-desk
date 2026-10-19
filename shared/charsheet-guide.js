@@ -2,6 +2,8 @@
 // starting equipment and spells, with a short explanation of each choice for players who are new to D&D.
 // Used by every character sheet (CharSheet.mount's ✨ button, and the sheet app opens it for a new character).
 // CharGuide.open(model, { onDone(model) }) works on a copy and only hands it back when the player finishes.
+// CharGuide.levelUp(model, { part, live, onDone(model, result) }) does the same for one new level (hit points, subclass,
+// ability scores or a feat, new features and spells), using CharSheet.levelPlan/levelUp like the sheet's quick dialog.
 window.CharGuide = (() => {
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const sgn = (n) => (n >= 0 ? '+' : '') + n;
@@ -161,9 +163,10 @@ window.CharGuide = (() => {
       background: () => {
         const b = bg();
         return `<h2>Choose a background</h2><p class="cs-hint">Your background is what you did before becoming an adventurer. It raises your ability scores, and gives you two skills, a tool and a starting feat.</p>
-          <div class="cg-picks">${D.backgrounds.map(x => card(x.name === st.background, 'bg', x.name, (BG_INFO[x.name] || '📜').slice(0, 2), x.name, esc((BG_INFO[x.name] || '').slice(2).trim()),
-            `<em>Boosts ${x.abilities.map(a => AB_NAME[a]).join(', ')} · Skills: ${esc(x.skills.join(', '))} · Feat: ${esc(x.feat || '—')}</em>`)).join('')}</div>
-          ${b ? tip(`Your DM may allow other backgrounds. You can type any background on the sheet later; these four come with the rules built in.`) : ''}`;
+          <div class="cg-picks">${D.backgrounds.map(x => card(x.name === st.background, 'bg', x.name, x.homebrew ? '★' : (BG_INFO[x.name] || '📜').slice(0, 2), x.name,
+            esc(BG_INFO[x.name] ? BG_INFO[x.name].slice(2).trim() : String(x.desc || '').replace(/[*_#>]/g, '').split(/(?<=\.)\s/)[0].slice(0, 160)),
+            `<em>${x.abilities.length ? `Boosts ${x.abilities.map(a => AB_NAME[a]).join(', ')} · ` : ''}Skills: ${esc(x.skills.join(', ') || '—')} · Feat: ${esc(x.feat || '—')}${x.homebrew ? ' · from your DM' : ''}</em>`)).join('')}</div>
+          ${b ? tip(`Your DM may allow other backgrounds. You can type any background on the sheet later; the ones here come with their rules built in.`) : ''}`;
       },
 
       abilities: () => {
@@ -177,7 +180,7 @@ window.CharGuide = (() => {
             ${st.method === 'manual' ? `<input type="number" inputmode="numeric" min="3" max="20" data-gf="score" data-a="${a}" value="${esc(st.assign[a] ?? '')}" placeholder="10">`
               : `<select data-gf="score" data-a="${a}" ${pool().length ? '' : 'disabled'}><option value="">—</option>${pool().map((v, i) => pool().indexOf(v) === i ? `<option value="${v}"${st.assign[a] === v ? ' selected' : ''}${used(v, a) ? ' class="cg-used"' : ''}>${v}</option>` : '').join('')}</select>`}
             <span class="cg-final">${baseScore(a) == null ? '' : `${finalScore(a)} <i>${sgn(mod(finalScore(a)))}</i>${bonusOf(a) ? ` <em>(+${bonusOf(a)})</em>` : ''}`}</span></div>`).join('')}</div>
-          ${b ? `<div class="cs-card"><h4>Background bonus (${esc(b.name)})</h4><p class="cs-hint">Your background raises ${b.abilities.map(a => AB_NAME[a]).join(', ')}: +2 to one and +1 to another, or +1 to all three.</p>
+          ${b && b.abilities.length ? `<div class="cs-card"><h4>Background bonus (${esc(b.name)})</h4><p class="cs-hint">Your background raises ${b.abilities.map(a => AB_NAME[a]).join(', ')}: +2 to one and +1 to another, or +1 to all three.</p>
             <div class="cs-seg small"><button data-g="bonus" data-v="21" class="${st.bonus === '21' ? 'on' : ''}">+2 and +1</button><button data-g="bonus" data-v="111" class="${st.bonus === '111' ? 'on' : ''}">+1 to all three</button>${st.method === 'manual' ? `<button data-g="bonus" data-v="none" class="${st.bonus === 'none' ? 'on' : ''}">Already in my scores</button>` : ''}</div>
             ${st.bonus === '21' ? `<div class="cg-row">+2 <select data-gf="plus2">${b.abilities.map(a => `<option value="${a}"${a === st.plus2 ? ' selected' : ''}>${AB_NAME[a]}</option>`).join('')}</select>
               +1 <select data-gf="plus1">${b.abilities.filter(a => a !== st.plus2).map(a => `<option value="${a}"${a === st.plus1 ? ' selected' : ''}>${AB_NAME[a]}</option>`).join('')}</select></div>` : ''}</div>` : ''}
@@ -294,5 +297,187 @@ window.CharGuide = (() => {
     draw();
     return { close };
   }
-  return { open };
+  // ---------- Level up, step by step ----------
+  function levelUp(model, opts = {}) {
+    const CS = window.CharSheet, AB = CS.AB, AB_NAME = CS.AB_NAME;
+    const base = CS.prepare(JSON.parse(JSON.stringify(model || {})));
+    const plan = (i) => CS.levelPlan(base, i, opts.live);
+    let P = plan(opts.part || 0);
+    if (P.blocked) return null;
+    const pr = () => PRIORITY[P.c.name] || AB;
+    const st = { step: 0, rolled: null, kept: null, roll: '', subclass: '', asi: 'two', a: '', b: '', feat: '', spells: new Set() };
+    const bestUp = () => pr().find(a => P.D.score[a] < 20) || 'con';
+    const resetAsi = () => { st.a = bestUp(); st.b = pr().find(a => a !== st.a && P.D.score[a] < 20) || AB.find(a => a !== st.a); };
+    resetAsi();
+
+    // Spells: new picks are what the next level adds, or more if the sheet has fewer than it should.
+    const spellPicks = () => {
+      const { A, D, c } = P, have = D.spells || [];
+      const maxLv = Math.max(0, ...A.slots.map(x => x.level), A.pact ? A.pact.level : 0);
+      const mine = CS.data().spells.filter(x => x.classes.includes(c.name) && !have.some(h => h.name.toLowerCase() === x.name.toLowerCase()));
+      const nC = Math.max(A.counts.cantrips - D.counts.cantrips, A.counts.cantrips - have.filter(x => x.level === 0).length, 0);
+      const nP = Math.max(A.counts.prepared - D.counts.prepared, A.counts.prepared - have.filter(x => x.level > 0).length, 0);
+      return { cantrips: mine.filter(x => x.level === 0), leveled: mine.filter(x => x.level > 0 && x.level <= Math.max(1, maxLv)), nC: Math.min(nC, 4), nP: Math.min(nP, 6), maxLv };
+    };
+    const subNow = () => P.needSub && st.subclass ? (P.c.subclasses.find(x => x.name === st.subclass) || null) : null;
+    const newFeatures = () => {
+      const sc = subNow();
+      return sc ? [...P.feats.filter(f => !/Subclass$/i.test(f.name)), ...sc.features.filter(f => f.level === P.newLvl).map(f => ({ ...f, src: sc.name }))] : P.feats;
+    };
+    const steps = () => ['start', 'hp', ...(P.needSub ? ['subclass'] : []), ...(P.asi ? ['asi'] : []), ...(newFeatures().length ? ['features'] : []),
+      ...(P.c.spellAbility && (spellPicks().nC || spellPicks().nP) ? ['spells'] : []), 'done'];
+    const choice = () => ({ rolled: st.rolled, subclass: st.subclass,
+      asi: { mode: st.asi, a: st.a, b: st.b, feat: st.feat }, spells: [...st.spells] });
+    function build() {
+      const m = JSON.parse(JSON.stringify(base)), r = CS.levelUp(m, CS.levelPlan(m, P.partIdx, opts.live), choice());
+      return { m: CS.applyAuto(CS.clean(m)), r };
+    }
+
+    const wrap = document.createElement('div');
+    wrap.className = 'cg cs';
+    document.body.append(wrap);
+    document.body.classList.add('cg-open');
+    const close = () => { wrap.remove(); document.body.classList.remove('cg-open'); };
+    const card = (on, act, v, icon, title, text, extra = '') => `<button class="cg-pick${on ? ' on' : ''}" data-g="${act}" data-v="${esc(v)}"><span class="cg-ico">${icon}</span><span><b>${esc(title)}</b><small>${text}</small>${extra}</span></button>`;
+    const tip = (html) => `<div class="cg-tip">💡 ${html}</div>`;
+    const feature = (f, openIt) => `<details${openIt ? ' open' : ''}><summary>${esc(f.name)}${f.src ? ` <small>${esc(f.src)}</small>` : ''}</summary><div class="cs-dlg-text">${CS.fmt(f.desc || '')}</div></details>`;
+    const after = (a) => st.asi === 'two' ? (a === st.a ? 2 : 0) : st.asi === 'split' ? (a === st.a ? 1 : 0) + (a === st.b ? 1 : 0) : 0;
+
+    const VIEWS = {
+      start: () => {
+        const { D, c, newLvl, A } = P, info = CLASS_INFO[c.name] || ['🎲'];
+        return `<h2>${info[0]} Level ${D.lvl + 1}!</h2>
+          <p>Every new level makes your character tougher and gives them something new. This guide shows you what you get and helps with any choices, one at a time.</p>
+          ${D.multi ? `<div class="cs-card"><h4>Which class goes up?</h4><p class="cs-hint">You have more than one class. The new level goes to one of them.</p>
+            <div class="cs-seg">${D.parts.map((x, i) => `<button data-g="part" data-v="${i}" class="${i === P.partIdx ? 'on' : ''}">${esc(x.c ? x.c.name : x.name)} ${x.lvl} → ${x.lvl + (i === P.partIdx ? 1 : 0)}</button>`).join('')}</div></div>` : ''}
+          <div class="cs-card"><h4>What ${esc(c.name)} level ${newLvl} brings</h4><ul class="cg-list">
+            <li><b>More hit points</b>, so you can take more hits.</li>
+            ${A.pb !== D.pb ? `<li><b>Proficiency bonus +${D.pb} → +${A.pb}</b>: every attack, save and skill you're trained in gets better.</li>` : ''}
+            ${P.needSub ? '<li><b>Your subclass</b>: you choose how your class specializes.</li>' : ''}
+            ${P.asi ? '<li><b>Ability Score Improvement</b>: raise your scores, or take a feat.</li>' : ''}
+            ${newFeatures().filter(f => !/^Ability Score Improvement$|Subclass$/i.test(f.name)).map(f => `<li>${esc(f.name)}</li>`).join('')}
+            ${P.c.spellAbility && (spellPicks().nC || spellPicks().nP) ? '<li><b>New spells</b> to choose</li>' : ''}</ul></div>
+          ${tip('Level up when your DM says so, usually at the end of a session or after a long rest. Nothing changes on your sheet until the last step.')}`;
+      },
+
+      hp: () => {
+        const { c, avg, D } = P;
+        return `<h2>Hit points</h2><p class="cs-hint">Your maximum hit points go up every level: one roll of your hit die (a d${c.hitDie} for a ${esc(c.name)}) plus your Constitution modifier (${sgn(D.md.con)}).</p>
+          <div class="cg-picks">${card(st.rolled == null, 'hp', 'avg', '⚖', `Take the average: +${avg}`, 'Safe and steady. Most players do this.')}
+          ${card(st.rolled != null, 'hp', 'roll', '🎲', st.rolled != null ? `You rolled: +${st.rolled}` : `Roll 1d${c.hitDie}${D.md.con ? sgn(D.md.con) : ''}`, st.rolled != null ? esc(st.roll) + ' · one roll per level, no rerolls' : 'Could be more than the average, or less.')}</div>
+          <p>Maximum HP: <b>${D.maxHp ?? '—'} → ${(D.maxHp || 0) + (st.rolled != null ? st.rolled : avg)}</b></p>
+          ${tip('Ask your DM whether your table rolls for hit points. If they don\'t say, take the average.')}`;
+      },
+
+      subclass: () => {
+        const { c } = P, sc = subNow();
+        return `<h2>Choose your subclass</h2><p class="cs-hint">Your subclass is your own take on being a ${esc(c.name)}. It gives you features now and at later levels, so pick the one that sounds most like your character.</p>
+          <div class="cg-picks">${c.subclasses.map(x => card(x.name === st.subclass, 'sub', x.name, x.homebrew ? '★' : (CLASS_INFO[c.name] || ['🎲'])[0], x.name, esc(x.summary || ''))).join('')}</div>
+          ${sc ? `<div class="cs-card"><h4>What ${esc(sc.name)} gives you</h4>${sc.features.filter(f => f.level === P.newLvl).map(f => feature(f, true)).join('')}
+            ${sc.features.some(f => f.level > P.newLvl) ? `<p class="cs-hint">Later: ${sc.features.filter(f => f.level > P.newLvl).map(f => `${esc(f.name)} (level ${f.level})`).join(', ')}</p>` : ''}</div>` : ''}
+          <label class="cs-field"><span>Or type one your DM allows</span><input data-gf="subtext" value="${esc(c.subclasses.some(x => x.name === st.subclass) ? '' : st.subclass)}" placeholder="Subclass name"></label>`;
+      },
+
+      asi: () => {
+        const { D } = P, feats = CS.data().feats.filter(f => f.type === 'general' || f.type === 'origin' || (f.type === 'epic-boon' && P.D.lvl + 1 >= 19)).sort((x, y) => (x.type === 'general' ? 0 : 1) - (y.type === 'general' ? 0 : 1) || x.name.localeCompare(y.name));
+        const sel = (k, skip) => `<select data-gf="${k}">${AB.filter(a => a !== skip).map(a => `<option value="${a}"${st[k] === a ? ' selected' : ''}${D.score[a] >= 20 ? ' disabled' : ''}>${AB_NAME[a]} (${D.score[a]})</option>`).join('')}</select>`;
+        const odd = AB.filter(a => D.score[a] % 2 === 1 && D.score[a] < 20);
+        return `<h2>Ability Score Improvement</h2><p class="cs-hint">You can raise your ability scores, or learn a <b>feat</b> instead: a special talent, like being extra tough or a sharpshooter.</p>
+          <div class="cs-seg">${[['two', '+2 to one'], ['split', '+1 to two'], ['feat', 'A feat']].map(([k, l]) => `<button data-g="asi" data-v="${k}" class="${st.asi === k ? 'on' : ''}">${l}</button>`).join('')}</div>
+          ${st.asi === 'two' ? `<div class="cg-row">+2 ${sel('a')}</div>` : ''}
+          ${st.asi === 'split' ? `<div class="cg-row">+1 ${sel('a')} +1 ${sel('b', st.a)}</div>` : ''}
+          ${st.asi !== 'feat' ? `<div class="cg-abils">${AB.map(a => `<div class="cg-ab"><b>${AB_NAME[a]}</b><small>${ABOUT_AB[a]}</small><span></span>
+            <span class="cg-final">${Math.min(20, D.score[a] + after(a))} <i>${sgn(mod(Math.min(20, D.score[a] + after(a))))}</i>${after(a) ? ` <em>(+${after(a)})</em>` : ''}</span></div>`).join('')}</div>
+            ${tip(`${esc(P.c.name)}s get the most from <b>${AB_NAME[bestUp()]}</b>. A modifier only goes up at even scores${odd.length ? `, so your odd ones (${odd.map(a => AB_NAME[a]).join(', ')}) are worth a +1` : ''}. Scores can't go above 20.`)}`
+          : `<div class="cg-picks">${feats.map(f => `<label class="cg-spell"><input type="radio" name="cg-feat" data-gf="feat" data-v="${esc(f.name)}"${st.feat === f.name ? ' checked' : ''}>
+              <details><summary><b>${f.homebrew ? '★ ' : ''}${esc(f.name)}</b> <small>${esc(f.type.replace('-', ' '))} feat${f.prereq ? ' · needs ' + esc(f.prereq) : ''}</small></summary><div class="cs-dlg-text">${CS.fmt(f.desc || '')}</div></details></label>`).join('')}</div>
+            <label class="cs-field"><span>Or type a feat your DM allows</span><input data-gf="feattext" value="${esc(feats.some(f => f.name === st.feat) ? '' : st.feat)}" placeholder="Feat name"></label>
+            ${tip('Tap a feat\'s name to read it. Many feats also give +1 to an ability score; the sheet lists it under Features, and you can raise the score in ✏ Edit.')}`}`;
+      },
+
+      features: () => `<h2>New features</h2><p class="cs-hint">These are new things your character can do. They'll be on your <b>Features</b> tab; tap one there any time to read it again.</p>
+        <div class="cs-card">${newFeatures().map((f, i) => feature(f, i < 3)).join('')}</div>
+        ${tip('Features with uses (like "twice per Long Rest") get dots on the Actions tab so you can tick them off.')}`,
+
+      spells: () => {
+        const { cantrips, leveled, nC, nP, maxLv } = spellPicks(), nc = cantrips.filter(x => st.spells.has(x.name)).length, np = leveled.filter(x => st.spells.has(x.name)).length;
+        const row = (x, full) => `<label class="cg-spell"><input type="checkbox" data-gf="spell" data-v="${esc(x.name)}"${st.spells.has(x.name) ? ' checked' : ''}${!st.spells.has(x.name) && full ? ' disabled' : ''}>
+          <details><summary><b>${x.homebrew ? '★ ' : ''}${esc(x.name)}</b> <small>${x.level ? ord(x.level) + ' · ' : ''}${esc(x.school)}</small></summary><div class="cs-dlg-text">${CS.fmt(x.desc || '')}</div></details></label>`;
+        return `<h2>New spells</h2><p class="cs-hint">Your magic grows: ${maxLv ? `you can now cast spells up to <b>${ord(maxLv)} level</b>. ` : ''}Choose your new spells. Tap a name to read it. You can skip this and add spells on the Spells tab later.</p>
+          ${nC ? `<div class="cs-card"><h4>New cantrips <small>pick ${nC} · ${nc}/${nC}</small></h4>${cantrips.map(x => row(x, nc >= nC)).join('')}</div>` : ''}
+          ${nP ? `<div class="cs-card"><h4>New prepared spells <small>pick ${nP} · ${np}/${nP}</small></h4>${leveled.slice().sort((x, y) => y.level - x.level || x.name.localeCompare(y.name)).map(x => row(x, np >= nP)).join('')}</div>` : ''}
+          ${tip('Your highest-level spells are listed first. A spell that solves a problem (flying, healing, getting past a door) is often worth more than another damage spell.')}`;
+      },
+
+      done: () => {
+        const { m, r } = build(), X = CS.derive(m, opts.live), D = P.D;
+        return `<h2>Ready for level ${m.level}</h2>
+          <div class="cs-tiles cs-tiles3"><div class="cs-tile"><b>${D.maxHp ?? '—'} → ${X.maxHp ?? '—'}</b><span>Max HP</span></div><div class="cs-tile"><b>+${X.pb}</b><span>Proficiency</span></div><div class="cs-tile"><b>${X.ac}</b><span>AC</span></div></div>
+          <div class="cs-card"><h4>What changes</h4><ul class="cg-list">
+            <li>${esc(r.cls)} level ${r.newLvl}: +${r.gain} hit points${r.rolled ? ' (rolled)' : ''}</li>
+            ${st.subclass && P.needSub ? `<li>Subclass: <b>${esc(st.subclass)}</b></li>` : ''}
+            ${r.asiText ? `<li>${esc(r.asiText)}</li>` : P.asi ? '<li>Ability Score Improvement: nothing chosen yet (you can go back)</li>' : ''}
+            ${r.features.length ? `<li>New: ${esc(r.features.join(', '))}</li>` : ''}
+            ${r.spells.length ? `<li>Spells: ${esc(r.spells.join(', '))}</li>` : ''}</ul></div>
+          ${tip('Your DM sees a card saying you levelled up, with what you chose.')}
+          <button class="cs-btn primary big" data-g="finish">⬆ Level up</button>`;
+      },
+    };
+    function blocker(id) {
+      if (id === 'subclass' && !st.subclass) return 'Choose a subclass';
+      if (id === 'asi' && st.asi === 'feat' && !st.feat) return 'Choose a feat';
+      return '';
+    }
+    function draw(keepScroll) {
+      const list = steps(); st.step = Math.min(st.step, list.length - 1);
+      const id = list[st.step], body = wrap.querySelector('.cg-body'), y = keepScroll && body ? body.scrollTop : 0;
+      wrap.innerHTML = `<div class="cg-head"><div class="cg-dots">${list.slice(1).map((_, i) => `<i class="${i + 1 <= st.step ? 'on' : ''}"></i>`).join('')}</div><button class="cg-x" data-g="close">Close ✕</button></div>
+        <div class="cg-body">${VIEWS[id]()}</div>
+        ${id === 'done' && st.step ? `<div class="cg-foot"><button class="cs-btn" data-g="back">← Back</button><span class="cg-why"></span><span></span></div>`
+          : `<div class="cg-foot">${st.step ? '<button class="cs-btn" data-g="back">← Back</button>' : '<span></span>'}<span class="cg-why">${esc(blocker(id))}</span><button class="cs-btn primary" data-g="next" ${blocker(id) ? 'disabled' : ''}>Next →</button></div>`}`;
+      wrap.querySelector('.cg-body').scrollTop = y;
+    }
+    wrap.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-g]'); if (!b) return;
+      const g = b.dataset.g, v = b.dataset.v;
+      if (g === 'close') { if (st.step === 0 || confirm('Stop levelling up? Nothing changes on your sheet.')) close(); return; }
+      if (g === 'next') { if (!blocker(steps()[st.step])) st.step++; return draw(); }
+      if (g === 'back') { st.step = Math.max(0, st.step - 1); return draw(); }
+      if (g === 'finish') { const { m, r } = build(); close(); if (opts.onDone) opts.onDone(m, r); return; }
+      if (g === 'part') { P = plan(Number(v)); Object.assign(st, { rolled: null, kept: null, roll: '', subclass: '', feat: '', spells: new Set() }); resetAsi(); }
+      else if (g === 'hp') {
+        // One roll per level: going back to the average and rolling again gives the same result.
+        if (v === 'avg') st.rolled = null;
+        else if (st.rolled == null) {
+          if (st.kept == null) { const r = CS.rollDice(`1d${P.c.hitDie}${P.D.md.con ? sgn(P.D.md.con) : ''}`); st.kept = Math.max(1, r.total); st.roll = r.detail; }
+          st.rolled = st.kept;
+        }
+      }
+      else if (g === 'sub') st.subclass = v;
+      else if (g === 'asi') { st.asi = v; if (v !== 'feat') st.feat = ''; }
+      else return;
+      draw(true);
+    });
+    wrap.addEventListener('change', (e) => {
+      const t = e.target, f = t.dataset.gf; if (!f) return;
+      if (f === 'a') { st.a = t.value; if (st.b === st.a) st.b = AB.find(x => x !== st.a && P.D.score[x] < 20) || ''; }
+      else if (f === 'b') st.b = t.value;
+      else if (f === 'feat') st.feat = t.dataset.v;
+      else if (f === 'spell') { if (t.checked) st.spells.add(t.dataset.v); else st.spells.delete(t.dataset.v); }
+      else return;
+      draw(true);
+    });
+    wrap.addEventListener('input', (e) => {
+      const t = e.target;
+      if (t.dataset.gf === 'subtext') { st.subclass = t.value.trim().slice(0, 80); wrap.querySelectorAll('[data-g="sub"]').forEach(x => x.classList.remove('on')); }
+      else if (t.dataset.gf === 'feattext') { st.feat = t.value.trim().slice(0, 80); wrap.querySelectorAll('[data-gf="feat"]').forEach(x => { x.checked = false; }); }
+      else return;
+      const id = steps()[st.step], nx = wrap.querySelector('[data-g="next"]'), why = wrap.querySelector('.cg-why');
+      if (nx) nx.disabled = !!blocker(id);
+      if (why) why.textContent = blocker(id);
+    });
+    draw();
+    return { close };
+  }
+  return { open, levelUp };
 })();

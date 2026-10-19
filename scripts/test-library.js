@@ -83,4 +83,35 @@ test('library ↔ account', () => {
   assert.deepStrictEqual(same.write, [], 'our own save coming back');
 });
 
-console.log(process.exitCode ? `${passed} library checks passed, some failed.` : `All ${passed} library checks passed.`);
+// The library ↔ account sync itself (cloudSync), with two devices and an in-memory stand-in for the cloud functions.
+const { fakeCloud } = require('./fake-cloud.js');
+function device() {
+  const files = new Map(), store = { meta: {} };
+  return { files, lib: { list: async () => [...files].map(([path, content]) => ({ path, content, mtime: 1 })), write: async (p, c) => { files.set(p, c); }, delete: async (p) => { files.delete(p); },
+    meta: async () => JSON.parse(JSON.stringify(store.meta)), saveMeta: async (m) => { store.meta = JSON.parse(JSON.stringify(m)); } } };
+}
+const accountChecks = (async () => {
+  const fc = fakeCloud(); global.Cloud = fc.Cloud;
+  const A = device(), B = device(), on = async (d) => { global.dm = { library: d.lib }; return L.cloudSync(); };
+  const S = 'Homebrew/Spells/Bolt.md', I = 'Homebrew/Items/Ring.md';
+  A.files.set(S, note('Bolt', 'Zap.')); A.files.set(I, note('Ring', 'Shiny.'));
+  await on(A);
+  assert.deepStrictEqual(Object.keys(fc.contents(L.CLOUD_ID)).sort(), [I, S], 'the first device fills the account');
+  assert.strictEqual(await on(B), true); assert.deepStrictEqual([...B.files.keys()].sort(), [I, S], 'and the second gets it all');
+  A.files.set(S, note('Bolt', 'Big zap.')); A.files.delete(I);
+  await on(A); await on(B);
+  assert.deepStrictEqual([B.files.get(S), B.files.has(I)], [note('Bolt', 'Big zap.'), false], 'an edit and a deletion reach the other device');
+  A.files.set(S, note('Bolt', 'From A.')); B.files.set(S, note('Bolt', 'From B.'));
+  await on(A); await on(B); await on(A);
+  assert.deepStrictEqual([A.files.get(S), B.files.get(S), fc.contents(L.CLOUD_ID)[S]], [note('Bolt', 'From B.'), note('Bolt', 'From B.'), note('Bolt', 'From B.')], 'changed on both: the last to sync wins, and both end up the same');
+  assert.strictEqual(await on(A), false, 'nothing more to do');
+  fc.camps.get('user-1|' + L.CLOUD_ID).deleted = true;
+  await on(B);
+  assert.deepStrictEqual(Object.keys(fc.contents(L.CLOUD_ID)), [S], 'a deleted cloud library is made again and refilled');
+  await fc.Cloud.signIn('other@example.test');
+  await on(A);
+  assert.deepStrictEqual([[...A.files.keys()], Object.keys(fc.contents(L.CLOUD_ID))], [[S], [S]], 'another account starts over, without deleting anything here');
+  passed++;
+})().catch((e) => { console.error(`✗ library ↔ account, two devices\n  ${e.stack}`); process.exitCode = 1; });
+
+accountChecks.then(() => console.log(process.exitCode ? `${passed} library checks passed, some failed.` : `All ${passed} library checks passed.`));

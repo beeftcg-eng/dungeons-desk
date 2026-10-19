@@ -92,15 +92,18 @@ window.Sheets = (() => {
       spells: hb.spells.filter(x => to(x.path)).map(x => ({ name: x.name, level: x.level, school: x.school, time: x.time, range: x.range, comp: x.comp, dur: x.dur,
         conc: x.conc || undefined, ritual: x.ritual || undefined, classes: x.classes, desc: playerText(x.desc), homebrew: true, to: to(x.path) })),
       items: hb.items.filter(x => to(x.path)).map(x => ({ name: x.name, rarity: x.rarity, type: x.type, desc: playerText(x.desc), homebrew: true, to: to(x.path) })),
+      feats: hb.feats.filter(x => to(x.path)).map(x => ({ name: x.name, type: x.type, prereq: x.prereq || undefined, desc: playerText(x.desc), homebrew: true, to: to(x.path) })),
+      backgrounds: hb.backgrounds.filter(x => to(x.path)).map(x => ({ name: x.name, abilities: x.abilities, feat: x.feat, skills: x.skills, tools: x.tools, equipment: x.equipment, desc: playerText(x.desc), homebrew: true, to: to(x.path) })),
+      subclasses: hb.subclasses.filter(x => to(x.path)).map(x => ({ name: x.name, cls: x.cls, summary: x.summary, features: x.features.map(f => ({ name: f.name, level: f.level, desc: playerText(f.desc) })), homebrew: true, to: to(x.path) })),
     };
     hbSig = sig;
     return hbCache;
   }
-  // The DM's own sheet view knows every homebrew spell and item, shared or not.
+  // The DM's own sheet view knows all the campaign's homebrew, shared or not.
   function allHomebrew() {
     if (!window.Homebrew) return { spells: [], items: [] };
-    const hb = Homebrew.list();
-    return { spells: hb.spells.map(x => ({ ...x, homebrew: true })), items: hb.items.map(x => ({ ...x, homebrew: true })) };
+    const hb = Homebrew.list(), mark = (list) => list.map(x => ({ ...x, homebrew: true }));
+    return { spells: mark(hb.spells), items: mark(hb.items), feats: mark(hb.feats), backgrounds: mark(hb.backgrounds), subclasses: mark(hb.subclasses) };
   }
 
   // What phones get: recent results, each phone filters to its own (server.js viewFor).
