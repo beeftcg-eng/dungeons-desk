@@ -13,6 +13,9 @@ At the start of any line, type `/` to open the macro menu (or click **＋ Insert
 - **Blocks**: read-aloud box, DM secret, stat block, table, rumor table, image, relationship line, today's in-world date.
 - **Roll it now**: a random NPC, a monster at any CR, treasure, or a roll on one of your loot tables.
 
+## Spelling ✔
+Misspelled words get a red underline as you type, in **English and Spanish** at the same time. Right-click a word for suggestions, or choose **Add to dictionary** for names like Thorin or Waterdeep so they stop being marked. Pick the languages (or turn it off) in ⚙ Settings → ✔ Spelling. On the phone app, your phone's keyboard does the checking.
+
 ## Linking
 Type `[[` and choose a note to link it, like [[2 Running Combat]]. A link to a note that doesn't exist yet appears faded, and clicking it creates the note. The panel on the right shows **backlinks**: every note that links here. Add `#tags` anywhere and click one to find every note with that tag.
 

@@ -1,5 +1,5 @@
 // Dungeons Desk — Electron main process
-const { app, BrowserWindow, ipcMain, dialog, shell, protocol, net } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, protocol, net, session, Menu } = require('electron');
 const { pathToFileURL } = require('url');
 const path = require('path');
 const fs = require('fs');
@@ -45,6 +45,34 @@ const IMAGE_EXT = /\.(png|jpe?g|gif|webp|svg|avif|bmp)$/i;
 let config = { vault: path.join(docsDir(), 'Dungeons Desk Vault'), port: 7777, campaigns: [] };
 let win = null;
 let server = null;
+
+// Spell checking: config.spellcheck lists the languages ('en', 'es'); empty means off.
+const SPELL_LANGS = { en: 'English', es: 'Español' };
+const spellLangs = () => Array.isArray(config.spellcheck) ? config.spellcheck.filter(l => SPELL_LANGS[l]) : ['en', 'es'];
+function applySpellcheck() {
+  const ses = session.defaultSession;
+  const want = spellLangs();
+  ses.setSpellCheckerEnabled(want.length > 0);
+  if (process.platform === 'darwin' || !want.length) return; // macOS picks languages itself
+  // Chromium names dictionaries 'en-US', 'es', 'es-ES'…: take the best one for each language.
+  const avail = ses.availableSpellCheckerLanguages;
+  const pick = (l) => [l === 'en' ? 'en-US' : l, l].find(c => avail.includes(c)) || avail.find(c => c.startsWith(l + '-'));
+  const codes = want.map(pick).filter(Boolean);
+  if (codes.length) ses.setSpellCheckerLanguages(codes);
+}
+
+// Right-click in a text box: spelling suggestions, then cut/copy/paste.
+function contextMenu(wc, p) {
+  const items = [];
+  if (p.misspelledWord) {
+    for (const w of p.dictionarySuggestions.slice(0, 6)) items.push({ label: w, click: () => wc.replaceMisspelling(w) });
+    if (!p.dictionarySuggestions.length) items.push({ label: 'No suggestions', enabled: false });
+    items.push({ label: `Add “${p.misspelledWord}” to dictionary`, click: () => wc.session.addWordToSpellCheckerDictionary(p.misspelledWord) }, { type: 'separator' });
+  }
+  if (p.isEditable) items.push({ role: 'cut', enabled: p.editFlags.canCut }, { role: 'copy', enabled: p.editFlags.canCopy }, { role: 'paste', enabled: p.editFlags.canPaste }, { type: 'separator' }, { role: 'selectAll' });
+  else if (p.selectionText) items.push({ role: 'copy' });
+  if (items.length) Menu.buildFromTemplate(items).popup({ window: BrowserWindow.fromWebContents(wc) });
+}
 
 const newJoinCode = () => String(require('crypto').randomInt(0, 1_000_000)).padStart(6, '0');
 function loadConfig() {
@@ -539,6 +567,8 @@ function registerIpc() {
   ipcMain.handle('update:check', () => autoUpdater && autoUpdater.checkForUpdates().catch(e => sendUpdate({ state: 'error', message: e.message })));
   ipcMain.handle('update:download', () => autoUpdater && autoUpdater.downloadUpdate().catch(e => sendUpdate({ state: 'error', message: e.message })));
   ipcMain.handle('update:install', () => autoUpdater && autoUpdater.quitAndInstall());
+  ipcMain.handle('spell:get', () => ({ langs: spellLangs(), all: SPELL_LANGS }));
+  ipcMain.handle('spell:set', (_e, langs) => { config.spellcheck = (Array.isArray(langs) ? langs : []).filter(l => SPELL_LANGS[l]); saveConfig(); applySpellcheck(); return spellLangs(); });
   ipcMain.handle('shell:open', (_e, url) => { if (/^https?:\/\//.test(url)) shell.openExternal(url); });
 }
 
@@ -572,6 +602,7 @@ function createWindow() {
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   // Links in notes open in the system browser instead of inside the app.
   win.webContents.setWindowOpenHandler(({ url }) => { if (/^https?:/.test(url)) shell.openExternal(url); return { action: 'deny' }; });
+  win.webContents.on('context-menu', (_e, p) => contextMenu(win.webContents, p));
   win.webContents.on('will-navigate', (e, url) => { if (!url.startsWith('file:')) { e.preventDefault(); if (/^https?:/.test(url)) shell.openExternal(url); } });
 }
 
@@ -612,6 +643,7 @@ app.whenReady().then(async () => {
   server.code = config.joinCode;
   config.port = await server.listen(config.port);
   registerIpc();
+  applySpellcheck();
   createWindow();
   setupUpdater();
 });

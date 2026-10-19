@@ -84,6 +84,7 @@ window.Settings = (() => {
         Library.card(),
         installCard(),
         appearanceCard(),
+        spellCard(),
         updatesCard(),
         h('div.card',
           h('h3', '✍ Note formatting cheatsheet'),
@@ -122,6 +123,22 @@ window.Settings = (() => {
           h('label.field.inline', h('span', 'Text size'), h('select', { onchange: (e) => Themes.setZoom(e.target.value) }, [0.9, 1, 1.1, 1.2, 1.3].map(z => h('option', { value: z, selected: Themes.zoom() === z }, Math.round(z * 100) + '%'))))));
     };
     drawCard();
+    return card;
+  }
+
+  function spellCard() {
+    if (dm.isWeb) return null;
+    const card = h('div.card', h('h3', '✔ Spelling'));
+    dm.spell.get().then(({ langs, all }) => {
+      const on = new Set(langs);
+      card.append(h('p.dim', 'Misspelled words get a red underline in notes and other text boxes. Right-click one for suggestions, or to add a name like “Thorin” to the dictionary.'),
+        h('div.row', Object.entries(all).map(([code, name]) => h('label.chk', h('input', { type: 'checkbox', checked: on.has(code), onchange: async (e) => {
+          e.target.checked ? on.add(code) : on.delete(code);
+          await dm.spell.set([...on]);
+          toast(on.size ? `Checking spelling in ${[...on].map(c => all[c]).join(' and ')}` : 'Spell checking is off');
+        } }), ' ' + name))),
+        h('p.hint', 'Tick both to write in English and Spanish without switching. Dictionaries download once, the first time.'));
+    });
     return card;
   }
 

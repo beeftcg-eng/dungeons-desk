@@ -404,6 +404,8 @@ started: ${new Date().toISOString().slice(0, 10)}
         return res.json();
       },
     },
+    // The phone's own keyboard and browser check spelling.
+    spell: { get: async () => ({ web: true, langs: [], all: {} }), set: async () => [] },
     update: {
       info: async () => ({ web: true, version: VERSION, packaged: false, platform: 'phone app', canUpdate: false, status: null, releasesUrl: 'https://github.com/beeftcg-eng/dungeons-desk/releases' }),
       check: noop, download: noop, install: noop, onStatus: noop,

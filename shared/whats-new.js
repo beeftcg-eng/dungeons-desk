@@ -6,6 +6,12 @@
 window.WhatsNew = (() => {
   const LOG = [
     {
+      v: '1.5.1',
+      dm: [
+        '✔ <b>Spell checking</b> in English and Spanish at once: misspelled words are underlined, and right-click gives suggestions or adds a name to the dictionary. Choose the languages in ⚙ Settings → ✔ Spelling.',
+      ],
+    },
+    {
       v: '1.5.0',
       dm: [
         '🎬 <b>Session screen</b>: 🛏 Short and 🌙 Long rests for the whole party, ☆ to give someone Heroic Inspiration, and ✨ XP & levels (prefilled with what the fight was worth, or a milestone level). Players\' phones show what happened.',

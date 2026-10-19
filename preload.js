@@ -27,6 +27,7 @@ contextBridge.exposeInMainWorld('dm', {
     info: call('server:info'), publish: call('server:publish'), openDisplay: call('server:openDisplay'), newCode: call('server:newCode'), qr: call('server:qr'),
     onPlayers: (fn) => ipcRenderer.on('server:players', (_e, list) => fn(list)),
   },
+  spell: { get: call('spell:get'), set: call('spell:set') },
   openExternal: call('shell:open'),
   web: { open5e: call('web:open5e') },
   update: { info: call('update:info'), check: call('update:check'), download: call('update:download'), install: call('update:install'),
