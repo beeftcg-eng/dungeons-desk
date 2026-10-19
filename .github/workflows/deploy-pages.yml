@@ -41,6 +41,8 @@ jobs:
       - uses: actions/setup-node@v7
         with: { node-version: 22, cache: npm }
       - run: npm ci
+      # Electron fetches its own program on first use; get it now.
+      - run: node node_modules/electron/install.js && test -x node_modules/electron/dist/electron
       - run: sudo apt-get update -q && sudo apt-get install -yq xvfb
       - run: node scripts/build-web.js
       - name: Smoke test
