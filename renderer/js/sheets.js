@@ -241,5 +241,63 @@ window.Sheets = (() => {
     dm.onPlayerAction(playerAction);
   }
 
-  return { mount, open: openSheet, importNew, playerAction, playerFeed, playerHomebrew, refreshOpen, syncFromCombat, numbers };
+  // ---------- From the DM to players: rests, Heroic Inspiration, XP and levels, treasure ----------
+  // Each changes the sheets here (as the sheet itself would), and sends a notice that pops up once on the phones it's
+  // for (pub.notices, filtered per player in viewFor()). Notices are kept three hours.
+  const NOTICE_MS = 3 * 3600 * 1000;
+  const notices = () => { const s = Store.get(); s.notices = (s.notices || []).filter(n => Date.now() - n.at < NOTICE_MS).slice(0, 30); return s.notices; };
+  function notify(to, n) {
+    const list = notices();
+    list.unshift({ id: U.uid(), at: Date.now(), to, title: n.title, body: n.body || '', action: n.action || null });
+    Store.get().notices = list.slice(0, 30);
+    Store.save(); publishToPlayers();
+  }
+  const playerNotices = () => notices().map(n => ({ id: n.id, at: n.at, to: n.to, title: n.title, body: n.body, action: n.action }));
+  // A party member's sheet, changed by fn(model) and saved like a sheet the player sent.
+  function change(p, fn) {
+    const m = CharSheet.prepare(JSON.parse(JSON.stringify(modelOf(p))));
+    const r = fn(m);
+    apply(p, m);
+    if (open && open.p === p) open.api.set(modelOf(p), liveOf(p));
+    return r;
+  }
+  const named = () => party().filter(p => p.name);
+  function restAll(kind) {
+    named().forEach(p => change(p, m => CharSheet.rest(m, kind, liveOf(p))));
+    notify('all', kind === 'long'
+      ? { title: '🌙 Long Rest', body: 'The party takes a Long Rest. Your hit points, Hit Point Dice, spell slots and abilities are all back.' }
+      : { title: '🛏 Short Rest', body: 'The party takes a Short Rest. Your short-rest abilities are back. You can spend Hit Point Dice to heal.', action: 'hd' });
+    toast(kind === 'long' ? 'Long Rest: every sheet is restored' : 'Short Rest: short-rest abilities restored');
+  }
+  function inspire(p) {
+    const had = change(p, m => { const was = m.sheet.inspiration; m.sheet.inspiration = true; return was; });
+    if (had) return toast(`${p.name} already has Heroic Inspiration`);
+    notify([p.name], { title: '⭐ Heroic Inspiration', body: 'The DM gave you Heroic Inspiration. Spend it to reroll any one die, then it\'s gone until the DM gives it again.' });
+    toast(`${p.name} has Heroic Inspiration`);
+  }
+  // XP to each of `who` (party members). A character who now has enough for a new level is told to level up.
+  function awardXp(who, each) {
+    who.forEach(p => {
+      const r = change(p, m => { m.sheet.xp = (Number(m.sheet.xp) || 0) + each; return { xp: m.sheet.xp, lvl: Number(m.level) || 1 }; });
+      const next = CharSheet.levelForXp(r.xp);
+      notify([p.name], next > r.lvl
+        ? { title: `⬆ Level ${r.lvl + 1}!`, body: `You earned ${each.toLocaleString()} XP and now have ${r.xp.toLocaleString()}: enough for level ${r.lvl + 1}.`, action: 'levelup' }
+        : { title: `✨ +${each.toLocaleString()} XP`, body: `You now have ${r.xp.toLocaleString()} XP.${r.lvl < 20 ? ` Level ${r.lvl + 1} at ${CharSheet.XP_LEVELS[r.lvl].toLocaleString()}.` : ''}` });
+    });
+  }
+  function milestone(who) {
+    who.forEach(p => notify([p.name], { title: `⬆ Level ${(Number(p.level) || 1) + 1}!`, body: 'The DM says your character reaches the next level.', action: 'levelup' }));
+  }
+  // Treasure into one character's sheet: items ({name, qty}) and coins ({gp: 12, …}).
+  function give(p, items, coins = {}) {
+    CharSheet.setHomebrew(allHomebrew());
+    change(p, m => {
+      items.forEach(it => CharSheet.addItemTo(m, it.name, it.qty || 1));
+      Object.entries(coins).forEach(([k, v]) => { if (v > 0) m.sheet.coins[k] = (Number(m.sheet.coins[k]) || 0) + v; });
+    });
+    const list = [...items.map(it => (it.qty > 1 ? it.qty + ' × ' : '') + it.name), ...Object.entries(coins).filter(([, v]) => v > 0).map(([k, v]) => `${v.toLocaleString()} ${k}`)];
+    if (list.length) notify([p.name], { title: '💰 Treasure', body: `The DM gave you: ${list.join(', ')}. It's in your Gear.`, action: 'gear' });
+  }
+
+  return { mount, open: openSheet, importNew, playerAction, playerFeed, playerHomebrew, playerNotices, refreshOpen, syncFromCombat, numbers, restAll, inspire, awardXp, milestone, give };
 })();

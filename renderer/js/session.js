@@ -118,14 +118,50 @@ window.Session = (() => {
     const card = h('div.card', h('h3', '🛡 Party'));
     if (!party.length) return card.append(h('p.dim', 'Add the party in ⚙ Settings.')), card;
     card.append(h('div.session-party', party.map(p => {
-      const n = Sheets.numbers(p);
+      const n = Sheets.numbers(p), insp = !!(p.sheet && p.sheet.inspiration);
       let pp = null;
       if (p.sheet) { try { pp = CharSheet.derive(CharSheet.prepare({ ...p, sheet: p.sheet })).passive; } catch { /* sheet still being set up */ } }
-      return h('button.session-pc', { title: 'Open the character sheet', onclick: () => Sheets.open(p) },
-        h('b', p.name), h('span.dim.small', [p.cls, p.level ? `Lv ${p.level}` : ''].filter(Boolean).join(' ')),
-        h('span.chips', n.ac ? h('i', `AC ${n.ac}`) : null, n.maxHp ? h('i', `HP ${n.hp ?? n.maxHp}/${n.maxHp}`) : null, pp != null ? h('i', `PP ${pp}`) : null));
-    })));
+      return h('div.session-pc-wrap',
+        h('button.session-pc', { title: 'Open the character sheet', onclick: () => Sheets.open(p) },
+          h('b', p.name), h('span.dim.small', [p.cls, p.level ? `Lv ${p.level}` : ''].filter(Boolean).join(' ')),
+          h('span.chips', n.ac ? h('i', `AC ${n.ac}`) : null, n.maxHp ? h('i', `HP ${n.hp ?? n.maxHp}/${n.maxHp}`) : null, pp != null ? h('i', `PP ${pp}`) : null)),
+        h('button.icon.session-insp' + (insp ? '.on' : ''), { title: insp ? `${p.name} has Heroic Inspiration` : `Give ${p.name} Heroic Inspiration`, onclick: () => { Sheets.inspire(p); draw(); } }, insp ? '⭐' : '☆'));
+    })),
+      // Rests and XP change every sheet here, and tell the players' phones.
+      h('div.row.session-party-btns',
+        h('button', { onclick: () => rest('short') }, '🛏 Short rest'),
+        h('button', { onclick: () => rest('long') }, '🌙 Long rest'),
+        h('button', { onclick: xpDialog }, '✨ XP & levels')));
     return card;
+  }
+  async function rest(kind) {
+    if (ini().active && !(await U.confirm('Rest during a fight?', `A fight is running. Take a ${kind === 'long' ? 'Long' : 'Short'} Rest anyway? Hit points in the fight stay as they are.`))) return;
+    Sheets.restAll(kind);
+    draw();
+  }
+  // XP for everyone (prefilled with the defeated enemies of the fight in the tracker), or a level by milestone.
+  function xpDialog() {
+    const party = Store.get().party.filter(p => p.name);
+    const won = ini().combatants.filter(c => c.defeated && c.sb && !['pc', 'ally', 'lair'].includes(c.kind)).reduce((t, c) => t + SRD.xp(c.sb.cr), 0);
+    const amount = h('input', { type: 'number', min: 0, value: won || '' , placeholder: 'XP' });
+    const split = h('select', h('option', { value: 'split' }, 'shared between them'), h('option', { value: 'each' }, 'to each of them'));
+    const picks = party.map(p => ({ p, box: h('input', { type: 'checkbox', checked: true }) }));
+    const chosen = () => picks.filter(x => x.box.checked).map(x => x.p);
+    const each = () => { const v = Math.max(0, Math.round(Number(amount.value) || 0)), n = chosen().length; return split.value === 'split' && n ? Math.floor(v / n) : v; };
+    const note = h('p.dim.small');
+    const upd = () => { note.textContent = chosen().length ? `Each gets ${each().toLocaleString()} XP.` : 'Tick someone.'; };
+    [amount, split].forEach(x => x.addEventListener('input', upd)); picks.forEach(x => x.box.addEventListener('change', upd));
+    const m = U.modal('✨ XP & levels', [
+      h('div.row', h('label.field', h('span', 'XP'), amount), h('label.field', h('span', ' '), split)),
+      won ? h('p.hint', `${won.toLocaleString()} XP is what the defeated enemies in the tracker are worth.`) : null,
+      h('div.session-xp-who', picks.map(x => h('label.chk', x.box, ' ' + x.p.name, h('span.dim.small', ` · ${Number((x.p.sheet || {}).xp) || 0} XP, level ${x.p.level || 1}`)))),
+      note,
+      h('div.row', h('button.primary', { onclick: () => { const v = each(); if (!v || !chosen().length) return; Sheets.awardXp(chosen(), v); m.close(); draw(); U.toast(`${v.toLocaleString()} XP each to ${chosen().map(p => p.name).join(', ')}`); } }, '✨ Give XP'),
+        h('span.grow'),
+        h('button', { title: 'For milestone levelling: their phones open the level-up guide', onclick: () => { if (!chosen().length) return; Sheets.milestone(chosen()); m.close(); U.toast('Told them to level up'); } }, '⬆ Milestone: they level up')),
+      h('p.hint', 'Players get a notice on their phone; when they have enough XP for a new level (or you use a milestone), it opens the level-up guide.'),
+    ]);
+    upd();
   }
 
   // ---------- Pinned notes ----------

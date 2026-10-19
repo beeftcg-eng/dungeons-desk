@@ -331,6 +331,23 @@ window.CharSheet = (() => {
     model.sheet.items.push(it);
   }
 
+  // ---------- Rests and experience ----------
+  // What a rest gives back, on the model. Used by the sheet's rest buttons and the DM's "rest for everyone".
+  function restModel(model, kind, live) {
+    const s = model.sheet, D = derive(model, live);
+    if (kind === 'long') {
+      s.curHp = null; s.tempHp = 0; s.hdUsed = 0; s.slotsUsed = s.slotsUsed.map(() => 0); s.pactUsed = 0; s.resUsed = {}; s.feats.forEach(f => { f.used = 0; });
+    } else {
+      if (D.shortSlots) s.slotsUsed = s.slotsUsed.map(() => 0);
+      s.pactUsed = 0;
+      D.resources.forEach(r => { if (r.rest === 'short') s.resUsed[r.key] = 0; else if (r.rest === 'short1' && s.resUsed[r.key]) s.resUsed[r.key]--; });
+    }
+    return model;
+  }
+  // The 2024 table: the XP a character needs for each level (index 0 = level 1).
+  const XP_LEVELS = [0, 300, 900, 2700, 6500, 14000, 23000, 34000, 48000, 64000, 85000, 100000, 120000, 140000, 165000, 195000, 225000, 265000, 305000, 355000];
+  const levelForXp = (xp) => XP_LEVELS.filter(x => num(xp) >= x).length;
+
   // ---------- Levelling up ----------
   // levelPlan() says what the next level of one of the character's classes brings; levelUp() makes the player's choices
   // on the model. Shared by the sheet's ⬆ Level up dialog and the step-by-step guide (CharGuide.levelUp).
@@ -918,14 +935,7 @@ window.CharSheet = (() => {
     }
 
     function rest(kind) {
-      const s = model.sheet;
-      if (kind === 'long') {
-        s.curHp = null; s.tempHp = 0; s.hdUsed = 0; s.slotsUsed = s.slotsUsed.map(() => 0); s.pactUsed = 0; s.resUsed = {}; s.feats.forEach(f => { f.used = 0; });
-      } else {
-        if (D.shortSlots) s.slotsUsed = s.slotsUsed.map(() => 0);
-        s.pactUsed = 0;
-        D.resources.forEach(r => { if (r.rest === 'short') s.resUsed[r.key] = 0; else if (r.rest === 'short1' && s.resUsed[r.key]) s.resUsed[r.key]--; });
-      }
+      restModel(model, kind);
       commit();
       if (player) share({ kind: 'card', title: `${name || 'A player'} took a ${kind === 'long' ? 'Long' : 'Short'} Rest`, sub: kind === 'long' ? 'HP, spell slots and resources restored' : 'Short-rest resources restored', body: '' });
       toast(kind === 'long' ? 'Long Rest: everything is restored' : 'Short Rest taken');
@@ -1030,6 +1040,8 @@ window.CharSheet = (() => {
     const api = {
       guide: openGuide,
       levelUp: openLevelGuide,
+      // Show one of the sheet's tabs ('main', 'actions', 'gear', …).
+      tab(t) { tab = t; renderTabs(); renderBody(); },
       // New data from outside (the DM app, or the player's phone). Waits while someone is typing in the sheet.
       set(m, l) {
         if (root.contains(document.activeElement) && document.activeElement.matches('input, textarea, select')) { pending = { model: m, live: l }; live = l; renderHead(); return; }
@@ -1180,5 +1192,5 @@ window.CharSheet = (() => {
   }
   const fileName = (name) => `${String(name || 'Character').replace(/[\\/:*?"<>|]/g, '').trim() || 'Character'}.ddchar.json`;
 
-  return { mount, setHomebrew, printHtml, addItemTo, levelPlan, levelUp, data: DATA, AB, AB_NAME, ALIGN, BIO, derive, clean, prepare, applyAuto, cleanShare, resolve, rollDice, feedHtml, fmt, toFile, fromFile, fileName, toLink, fromLink, SHEET_URL, printable, readFile, FILE_TYPES };
+  return { mount, setHomebrew, printHtml, addItemTo, levelPlan, levelUp, rest: restModel, XP_LEVELS, levelForXp, data: DATA, AB, AB_NAME, ALIGN, BIO, derive, clean, prepare, applyAuto, cleanShare, resolve, rollDice, feedHtml, fmt, toFile, fromFile, fileName, toLink, fromLink, SHEET_URL, printable, readFile, FILE_TYPES };
 })();

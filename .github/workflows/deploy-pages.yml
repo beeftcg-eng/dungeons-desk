@@ -32,7 +32,8 @@ jobs:
       - uses: actions/upload-pages-artifact@v5
         with: { path: dist-web }
 
-  # Opens the built phone app in Electron (scripts/smoke-web.js): every DM view, the sheet app and the players' page.
+  # Opens the built phone app in Electron (scripts/smoke-web.js): every DM view, the sheet app and the players' page,
+  # then plays a LAN game with a phone (scripts/smoke-phone.js).
   # Any console error or missing file fails it, and then nothing is deployed. Screenshots are kept when it fails.
   smoke:
     runs-on: ubuntu-24.04
@@ -52,6 +53,9 @@ jobs:
             echo "== $P"
             SHOTS=shots/$P PAGE=$P CHECK=1 timeout 240 xvfb-run -a node_modules/electron/dist/electron --no-sandbox --disable-gpu scripts/smoke-web.js
           done
+      # The desktop app with a LAN game and a phone: recap, rest, Inspiration, XP, the level-up guide, treasure.
+      - name: Phone page, end to end
+        run: SHOTS=shots/phone timeout 300 xvfb-run -a node scripts/smoke-phone.js
       - if: failure()
         uses: actions/upload-artifact@v4
         with: { name: smoke-shots, path: shots }

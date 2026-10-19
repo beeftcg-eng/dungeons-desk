@@ -144,6 +144,7 @@ window.Store = (() => {
     maps: [],
     calendar: null,
     recap: { draft: '', sent: null },      // "Last time…" for players (Session view): what's being written, and what phones show
+    notices: [],                           // From the DM to players' phones: rests, Inspiration, XP, treasure (Sheets.notify)
   });
   let state = defaults();
   const listeners = new Set();
@@ -210,6 +211,7 @@ window.publishToPlayers = U.debounce(() => {
     feed: window.Sheets ? Sheets.playerFeed() : [],
     homebrew: window.Sheets ? Sheets.playerHomebrew() : { spells: [], items: [] },
     recap: window.Session ? Session.playerRecap() : null,
+    notices: window.Sheets ? Sheets.playerNotices() : [],
     ...(window.Notes ? Notes.playerWiki() : {}),
   };
   window.dm.server.publish(pub);

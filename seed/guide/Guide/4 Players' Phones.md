@@ -17,6 +17,8 @@ Players on the same Wi-Fi scan the QR code on the **⏳ Initiative** page. They 
 | 📝 Notes | Private **session notes**: **＋ Start today's notes** adds a section for each session, older ones fold up underneath, and **⬇ Save as a file** downloads them all. Your **📜 Last time…** recap (from the 🎬 Session screen) is at the top, with **📝 Copy into my notes**. On your Wi-Fi they're kept on your computer (in `.dmtools/players/`). At an online table they stay on the phone, and a player who signs in (the same account as the sheet app, so signing in to either does both) keeps them in their account and gets them on any phone. You can't read them. |
 | 👤 Me | Their **character sheet** (see below). Its **🪙 Token & file** tab has a **token maker** for their character's picture, **🖨 Print or save as PDF** for a regular paper sheet, and the character file buttons |
 
+**Things you send pop up on their phones:** your recap, rests, Heroic Inspiration, XP (with a **⬆ Level up now** button when they reach a new level) and treasure. Their sheet has already changed by then; the pop-up tells them what happened and takes them to the right place.
+
 ## Character sheets 📜
 Each character in **⚙ Settings → Party** has a full character sheet. Players fill in their own on the 👤 Me tab, and you can open anyone's with the 📜 button in the party table.
 

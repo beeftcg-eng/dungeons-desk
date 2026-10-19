@@ -157,6 +157,16 @@ test('Levelling up: Fighter 3 → 4 with an ability increase, Fighter 2 → 3 ch
   assert.strictEqual(CS.levelPlan(pc({ cls: 'Fighter', level: 20 }, {}), 0).blocked, 'Already level 20');
 });
 
+test('Rests and XP: what each rest restores, and the level an XP total reaches', () => {
+  const m = JSON.parse(JSON.stringify(thorin));
+  Object.assign(m.sheet, { curHp: 5, tempHp: 3, hdUsed: 2, resUsed: { second_wind_uses: 2 } });
+  CS.rest(m, 'short');
+  assert.deepStrictEqual([m.sheet.curHp, m.sheet.hdUsed, m.sheet.resUsed.second_wind_uses], [5, 2, 1], 'a Short Rest gives back one Second Wind, not HP');
+  CS.rest(m, 'long');
+  assert.deepStrictEqual([m.sheet.curHp, m.sheet.tempHp, m.sheet.hdUsed, m.sheet.resUsed], [null, 0, 0, {}], 'a Long Rest restores everything');
+  assert.deepStrictEqual([0, 299, 300, 2700, 354999, 355000, 1e7].map(CS.levelForXp), [1, 1, 2, 4, 19, 20, 20]);
+});
+
 // Share links use CompressionStream, which is async; checked after the rest.
 const linkCheck = (async () => {
   const m = CS.applyAuto(CS.clean(thorin));

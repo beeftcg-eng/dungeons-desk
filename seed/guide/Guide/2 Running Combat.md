@@ -57,6 +57,9 @@ actions:
 - **The fight:** the turn order with **Next turn ▶**. Tap anyone to deal damage (`7`), heal (`+7`) or set HP (`=7`). The current creature's stat block is underneath, with clickable dice.
 - **Quick dice:** d20, advantage, disadvantage and the usual dice.
 - **The party:** AC, HP and passive Perception. Tap someone to open their sheet.
+  - **☆** gives a character Heroic Inspiration (it turns into ⭐).
+  - **🛏 Short rest** / **🌙 Long rest** rests the whole party: every sheet gets back what that rest restores, and players' phones say so (after a Short Rest, with a button to spend Hit Point Dice).
+  - **✨ XP & levels** gives XP, shared out or to each, prefilled with what the defeated enemies in the tracker were worth. A character with enough XP for a new level gets a "Level up!" notice that opens the level-up guide on their phone. For milestone levelling, **⬆ Milestone: they level up** sends that notice straight away.
 - **📌 Pinned notes:** pin tonight's session plan, an NPC or a location with **📌** in the note toolbar, then open it right here.
 - **📜 Last time… (for players):** write a few lines about what happened last session and press **📣 Show to players**. It pops up on each player's phone when they open the game page, stays at the top of their 📝 Notes tab, and they can copy it into their own notes. Change it and send the new version, or **Stop showing** it.
 

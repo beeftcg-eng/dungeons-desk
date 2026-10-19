@@ -111,6 +111,7 @@
   .nhint { color: var(--dim); font-size: 13px; margin: 4px 0 10px; }
   .nbtns { display: flex; gap: 8px; flex-wrap: wrap; }
   .acct { display: grid; gap: 8px; margin: 8px 0; } .acct input { font-size: 16px; padding: 11px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--text); }
+  .wn-v { font-family: 'Cinzel', serif; color: var(--accent); margin: 0 0 8px; font-size: 18px; } .wn-list { margin: 0 0 6px; padding-left: 20px; line-height: 1.5; } .wn-list li { margin-bottom: 6px; }
   .recap { border-color: var(--accent); } .recap h3 { font-family: 'Cinzel', serif; color: var(--accent); margin: 0 0 8px; font-size: 19px; }
   .recap-body { line-height: 1.55; } .recap-body p { margin: 0 0 8px; }
   .viewer .recap { max-width: 560px; margin: 0 auto; }
@@ -177,6 +178,7 @@
 <script src="/shared/session-notes.js"></script>
 <script src="/shared/charsheet-guide.js"></script>
 <script src="/shared/pdf-char.js"></script>
+<script src="/shared/whats-new.js"></script>
 <script>
 (() => {
   const $ = (s) => document.querySelector(s);
@@ -293,16 +295,47 @@
   function renderRecap() {
     const r = data.recap;
     $('#recapbox').innerHTML = r ? recapHtml(r) : '';
-    if (!r || display || !me || store.get('dm.recap.seen') === String(r.at)) return;
-    // Not over the first-time tour or a handout; it shows on the next update instead.
-    if (tourStep >= 0 || !store.get('dm.tour.done') || document.querySelector('.viewer')) return;
-    store.set('dm.recap.seen', String(r.at));
+    popups();
+  }
+  // Pop-ups from the DM, one at a time, never over the first-time tour or a handout: the recap, then notices
+  // (rests, Heroic Inspiration, XP and levels, treasure). Each shows once on this phone.
+  const canPop = () => !display && me && tourStep < 0 && store.get('dm.tour.done') && !document.querySelector('.viewer, .cg, .cs-dlg-wrap');
+  function popup(html, onAct) {
     const v = document.createElement('div');
     v.className = 'viewer';
-    v.innerHTML = `<button class="close">Close ✕</button>${recapHtml(r)}<div style="text-align:center;margin-top:14px"><button class="btn primary got">Got it</button></div>`;
-    v.querySelectorAll('.close, .got').forEach(b => b.addEventListener('click', () => v.remove()));
+    v.innerHTML = `<button class="close">Close ✕</button>${html}`;
+    v.addEventListener('click', (e) => {
+      const b = e.target.closest('button'); if (!b) return;
+      if (b.classList.contains('close') || b.classList.contains('got')) { v.remove(); popups(); }
+      else if (b.dataset.act && onAct) { v.remove(); onAct(b.dataset.act); }
+    });
     document.body.append(v);
     buzz(120);
+  }
+  function popups() {
+    if (!data || !canPop()) return;
+    const r = data.recap;
+    if (r && store.get('dm.recap.seen') !== String(r.at)) {
+      store.set('dm.recap.seen', String(r.at));
+      return popup(`${recapHtml(r)}<div style="text-align:center;margin-top:14px"><button class="btn primary got">Got it</button></div>`);
+    }
+    let seen = [];
+    try { seen = JSON.parse(store.get('dm.notices.seen') || '[]'); } catch { /* start again */ }
+    const fresh = (data.notices || []).filter(n => !seen.includes(n.id)).reverse();
+    if (!fresh.length) {
+      const news = window.WhatsNew ? WhatsNew.take('player') : [];
+      return news.length && popup(`<div class="card wn">${WhatsNew.html(news, 'player')}</div><div style="text-align:center;margin-top:14px"><button class="btn primary got">Got it</button></div>`);
+    }
+    store.set('dm.notices.seen', JSON.stringify([...fresh.map(n => n.id), ...seen].slice(0, 100)));
+    const ACT = { levelup: '⬆ Level up now', hd: '🎲 Spend Hit Point Dice', gear: '🎒 See my gear' };
+    const acts = [...new Set(fresh.map(n => n.action).filter(a => ACT[a]))];
+    popup(`${fresh.map(n => `<div class="card recap"><h3>${esc(n.title)}</h3><div class="recap-body">${esc(n.body)}</div></div>`).join('')}
+      <div class="nbtns" style="justify-content:center;margin-top:14px">${acts.map(a => `<button class="btn primary" data-act="${a}">${ACT[a]}</button>`).join('')}<button class="btn${acts.length ? '' : ' primary'} got">Got it</button></div>`,
+      (a) => {
+        tab('char');
+        if (!sheet) return toast('Your sheet appears here once the DM adds you to the party');
+        if (a === 'levelup') sheet.levelUp(); else sheet.tab(a === 'hd' ? 'actions' : 'gear');
+      });
   }
   // Into the player's own notes as a section of its own (once the notes have loaded).
   document.addEventListener('click', (e) => {
@@ -674,6 +707,7 @@
   let tourStep = -1;
   function startTour() {
     if (display) return;
+    if (window.WhatsNew) WhatsNew.skip('player');               // new here: the tour covers it
     tourStep = 0; document.body.classList.add('touring'); drawTour();
   }
   function endTour() {
@@ -682,6 +716,7 @@
     document.querySelectorAll('.tut-dim, .tut-card').forEach(e => e.remove());
     document.querySelectorAll('nav button').forEach(b => b.classList.remove('tut-glow'));
     tab('turns');
+    popups();
   }
   function drawTour() {
     document.querySelectorAll('.tut-dim, .tut-card').forEach(e => e.remove());

@@ -44,6 +44,8 @@ window.App = (() => {
     show(localStorage.getItem('app.view') || 'notes');
     publishToPlayers();
     setTimeout(Campaigns.remindBackup, 4000);
+    // After an update: what's new, once (shared/whats-new.js).
+    setTimeout(() => { const news = window.WhatsNew ? WhatsNew.take('dm') : []; if (news.length) U.modal('✨ What\'s new', U.h('div.wn', { html: WhatsNew.html(news, 'dm') })); }, 1500);
     CloudSync.init();
     Library.init();
     Online.init();

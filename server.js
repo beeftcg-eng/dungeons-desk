@@ -20,7 +20,7 @@ class PlayerServer {
     this.mediaDir = mediaDir;
     this.clients = new Set(); // { res, player, display }
     this.known = new Map();   // lowercased name -> { name, lastSeen }
-    this.pub = { initiative: null, handouts: [], party: [], partyCards: [], wiki: [], wikiImages: [], map: null, calendar: null, feed: [], homebrew: { spells: [], items: [] }, recap: null };
+    this.pub = { initiative: null, handouts: [], party: [], partyCards: [], wiki: [], wikiImages: [], map: null, calendar: null, feed: [], homebrew: { spells: [], items: [] }, recap: null, notices: [] };
     this.onPlayers = () => {};
     this.onAction = () => {}; // (action) => void, handled by the DM app
     this.lastPing = new Map();

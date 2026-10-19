@@ -91,6 +91,37 @@ window.Loot = (() => {
     Store.onLoad(() => { selectedTable = null; drawTables(); });
   }
 
+  // Treasure onto the players' sheets (Sheets.give): each item to whoever you pick, coins to one or shared out.
+  function giveDialog(res) {
+    const party = Store.get().party.filter(p => p.name);
+    if (!party.length) return toast('Add the party in ⚙ Settings first');
+    const who = (sel) => h('select', h('option', { value: '' }, 'Nobody'), party.map((p, i) => h('option', { value: i, selected: sel === i }, p.name)));
+    const things = [
+      ...res.items.map(i => ({ name: i.name.replace(/ ★$/, ''), qty: 1, label: `${i.name} (${i.rarity})` })),
+      ...group(res.gems).map(g => ({ name: `${g.name} (${g.value} gp gem)`, qty: g.n, label: `${g.n}× ${g.name} (${g.value} gp each)` })),
+      ...group(res.art).map(g => ({ name: `${U.cap(g.name)} (${g.value} gp)`, qty: g.n, label: `${g.n > 1 ? g.n + '× ' : ''}${U.cap(g.name)} (${g.value} gp)` })),
+    ].map((t, i) => ({ ...t, sel: who(i % party.length) }));
+    const coins = Object.entries(res.coins).filter(([, v]) => v > 0);
+    const coinTo = h('select', h('option', { value: 'split' }, 'Shared evenly by the party'), party.map((p, i) => h('option', { value: i }, `All to ${p.name}`)), h('option', { value: '' }, 'Nobody'));
+    const m = U.modal('🎁 Give the treasure', [
+      things.length ? h('div.loot-give', things.map(t => h('div.row', h('span.grow', t.label), t.sel))) : null,
+      coins.length ? h('div.row', h('span.grow', h('b', 'Coins: '), coins.map(([k, v]) => `${v.toLocaleString()} ${k}`).join(', ')), coinTo) : null,
+      h('p.hint', 'It goes into their Gear and Money, and their phones show what they got. Coins that don\'t split evenly go to the first characters.'),
+      h('div.row.end', h('button', { onclick: () => m.close() }, 'Cancel'), h('button.primary', { onclick: () => {
+        const per = party.map(() => ({ items: [], coins: {} }));
+        things.forEach(t => { if (t.sel.value !== '') per[Number(t.sel.value)].items.push({ name: t.name, qty: t.qty }); });
+        coins.forEach(([k, v]) => {
+          if (coinTo.value === 'split') party.forEach((_, i) => { per[i].coins[k] = Math.floor(v / party.length) + (i < v % party.length ? 1 : 0); });
+          else if (coinTo.value !== '') per[Number(coinTo.value)].coins[k] = v;
+        });
+        let n = 0;
+        party.forEach((p, i) => { if (per[i].items.length || Object.values(per[i].coins).some(Boolean)) { Sheets.give(p, per[i].items, per[i].coins); n++; } });
+        m.close();
+        toast(n ? `Treasure given to ${n} character${n === 1 ? '' : 's'}` : 'Nothing given');
+      } }, '🎁 Give')),
+    ]);
+  }
+
   function treasurePane() {
     const kind = h('select', h('option', { value: 'individual' }, 'Individual treasure (per creature)'), h('option', { value: 'hoard' }, 'Treasure hoard'));
     const tier = h('select', L.tiers.map((t, i) => h('option', { value: i }, t.label)));
@@ -112,6 +143,7 @@ window.Loot = (() => {
         h('div.loot-total', `Total value: ${Math.round(res.total).toLocaleString()} gp`, h('span.dim', ' (plus magic items)')),
         h('div.row',
           h('button.primary', { onclick: gen }, '🎲 Reroll'),
+          h('button', { onclick: () => giveDialog(res), title: 'Put it on players\' character sheets; their phones show what they got' }, '🎁 Give to…'),
           h('button', { onclick: () => U.copy(toMarkdown(res)) }, '📋 Copy'),
           h('button', { onclick: async () => { await Notes.create('Loot ' + new Date().toLocaleDateString(), `---\ntype: loot\ntags: [loot]\n---\n# Loot\n\n${toMarkdown(res)}\n`, null, 'Loot'); toast('Saved to Notes'); } }, '💾 Save to Notes'))));
     };

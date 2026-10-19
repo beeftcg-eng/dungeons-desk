@@ -8,7 +8,7 @@ tags: [help, guide]
 **📖 Rules → + Homebrew** creates a monster, spell, magic item, feat, background or subclass. It's saved as a note in this campaign's **Homebrew** folder and marked ★ everywhere:
 - the Rules reference (filter with **★ My campaign**; feats, backgrounds and subclasses are under **Feats & more**)
 - the encounter builder and initiative
-- the **💰 Loot** generator, which mixes your items into treasure
+- the **💰 Loot** generator, which mixes your items into treasure. **🎁 Give to…** on rolled treasure puts each item (and the coins, shared out or to one character) straight onto players' sheets, and their phones show what they got.
 - character sheets: a homebrew background, feat or subclass is in the sheet's lists, with its rules built in. A subclass's features are `## Level 3: Name` sections in its note, and appear on the sheet at those levels.
 
 On any SRD entry, **✏ Copy to homebrew** makes an editable copy for your world.

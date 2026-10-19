@@ -86,10 +86,12 @@ test('viewFor: phones see only handouts, wiki pages, cards and feed meant for th
     feed: [{ player: 'Thorin', text: 'rolled 17' }, { player: 'Elara', text: 'rolled 3' }],
     homebrew: { feats: [{ name: 'Bog Stride', to: 'all' }, { name: 'Elara only', to: ['Elara'] }] },
     recap: { text: 'Last time…', html: '<p>Last time…</p>', at: 1 },
+    notices: [{ id: 'n1', to: 'all', title: 'Long Rest' }, { id: 'n2', to: ['Elara'], title: 'Inspiration' }],
   });
   const thorin = await firstEvent('player=thorin');
   assert.deepStrictEqual(thorin.homebrew.feats.map(f => f.name), ['Bog Stride'], 'homebrew feats filtered like spells');
   assert.strictEqual(thorin.recap.text, 'Last time…');
+  assert.deepStrictEqual(thorin.notices.map(n => n.id), ['n1'], 'notices for everyone or this player');
   assert.deepStrictEqual(thorin.handouts.map(h => h.id), ['a', 't']);
   assert.deepStrictEqual(thorin.wiki.map(w => w.title), ['Town']);
   assert.strictEqual(thorin.card.name, 'Thorin');
@@ -99,6 +101,7 @@ test('viewFor: phones see only handouts, wiki pages, cards and feed meant for th
   assert.deepStrictEqual(tv.feed, []);
   assert.strictEqual(tv.card, null);
   assert.strictEqual(tv.recap, null, 'the recap is for phones');
+  assert.deepStrictEqual(tv.notices, []);
 });
 
 test('move: needs a player and numeric x/y, then goes to the DM app', async () => {

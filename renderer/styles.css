@@ -578,6 +578,12 @@ td .src { margin-left: 8px; }
 .session-pc { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; text-align: left; padding: 8px 10px; }
 .chips { display: inline-flex; flex-wrap: wrap; gap: 4px; margin-left: auto; }
 .chips i { font-style: normal; font-size: 12px; background: var(--bg2); border: 1px solid var(--line); border-radius: 10px; padding: 1px 8px; }
+.session-pc-wrap { display: flex; align-items: stretch; gap: 4px; } .session-pc-wrap .session-pc { flex: 1; min-width: 0; }
+.session-insp { font-size: 20px; color: var(--dim); } .session-insp.on { color: var(--accent); }
+.session-party-btns { margin-top: 10px; flex-wrap: wrap; }
+.wn { max-width: 560px; } .wn-v { margin: 4px 0 8px; } .wn-list { padding-left: 20px; line-height: 1.55; } .wn-list li { margin-bottom: 6px; }
+.loot-give { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; } .loot-give select { max-width: 180px; }
+.session-xp-who { display: flex; flex-direction: column; gap: 4px; margin: 8px 0; }
 .session-recap-text { width: 100%; box-sizing: border-box; resize: vertical; min-height: 90px; }
 .session-recap-btns { margin-top: 8px; }
 .session-pins details { border-top: 1px solid var(--line); padding: 6px 0; }

@@ -102,6 +102,11 @@
 
   // ---------- The list of characters ----------
   let listDraws = 0;
+  // After an update, what's new (shared/whats-new.js) sits on top of the list until dismissed. Not for a first visit.
+  let news = [];
+  let stored = [];
+  try { stored = JSON.parse(localStorage.getItem(KEY) || '[]'); } catch { /* none */ }
+  if (window.WhatsNew) { if (Array.isArray(stored) && stored.length) news = WhatsNew.take('player'); else WhatsNew.skip('player'); }
   function showList() {
     if (notesUi) { notesUi.destroy(); notesUi = null; }
     if (sheet) { sheet.destroy(); sheet = null; }
@@ -113,7 +118,7 @@
     const stale = chars.filter(needsBackup), snoozed = Number(localStorage.getItem('dd.sheet.snooze') || 0) > Date.now();
     const stats = (c) => { try { const D = CharSheet.derive(CharSheet.prepare(c.model)); return `<span class="chips"><i>AC ${D.ac}</i><i>HP ${D.hp ?? '—'}/${D.maxHp ?? '—'}</i><i>Init ${D.init >= 0 ? '+' : ''}${D.init}</i><i>PP ${D.passive}</i></span>`; } catch { return ''; } };
     const av = (c) => c.model.sheet && c.model.sheet.portrait ? `<img class="av" src="${esc(c.model.sheet.portrait)}" alt="">` : `<span class="av">${esc((c.name || '?')[0].toUpperCase())}</span>`;
-    main.innerHTML = `${stale.length && !snoozed ? `<div class="card backup"><h3>💾 Keep a copy</h3><p class="hint">${esc(stale.map(c => c.name).join(', '))} ${stale.length === 1 ? 'hasn\'t' : 'haven\'t'} been saved to a file for a while. Phones sometimes clear app data, so a file or link keeps your character safe.</p>
+    main.innerHTML = `${news.length ? `<div class="card wn">${WhatsNew.html(news, 'player')}<div class="row"><button class="btn" data-a="news">Got it</button></div></div>` : ''}${stale.length && !snoozed ? `<div class="card backup"><h3>💾 Keep a copy</h3><p class="hint">${esc(stale.map(c => c.name).join(', '))} ${stale.length === 1 ? 'hasn\'t' : 'haven\'t'} been saved to a file for a while. Phones sometimes clear app data, so a file or link keeps your character safe.</p>
         <div class="row"><button class="btn primary" data-a="backup">⬇ Download ${stale.length === 1 ? 'it' : 'them'}</button><button class="btn" data-a="later">Later</button></div></div>` : ''}${chars.length ? '' : `<div class="empty"><div class="big">📜</div><p class="hint">A D&amp;D character sheet (2024 rules) that does the math for you: build a character, tap to roll, level up and track HP, spell slots and gear. Everything is saved on this phone.</p></div>`}
       <div class="chars">${chars.map(c => `<button class="char" data-id="${esc(c.id)}">${av(c)}<span><b>${esc(c.name)}</b><small>${esc(summary(c))}</small>${stats(c)}</span></button>`).join('')}</div>
       <div class="row"><button class="btn primary" data-a="new">＋ New character</button><button class="btn" data-a="import">⇩ Import a file or PDF</button></div>
@@ -129,6 +134,7 @@
       else if (b.dataset.a === 'new') newChar();
       else if (b.dataset.a === 'import') importFile();
       else if (['signin', 'signup', 'sync', 'signout', 'keep', 'drop'].includes(b.dataset.a)) cloudAction(b.dataset.a);
+      else if (b.dataset.a === 'news') { news = []; showList(); }
       else if (b.dataset.a === 'later') { localStorage.setItem('dd.sheet.snooze', Date.now() + 3 * DAY); showList(); }
       else if (b.dataset.a === 'backup') { stale.forEach((c, i) => setTimeout(() => { download(fileOf(c)); markSaved(c); if (i === stale.length - 1) showList(); }, i * 300)); }
     };

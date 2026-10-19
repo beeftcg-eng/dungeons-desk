@@ -12,7 +12,7 @@
     const feed = client.display ? [] : (pub.feed || []).filter(f => (f.player || '').toLowerCase() === me);
     const hb = pub.homebrew || {};
     const homebrew = client.display ? null : Object.fromEntries(['spells', 'items', 'feats', 'backgrounds', 'subclasses'].map(k => [k, (hb[k] || []).filter(x => forMe(x.to))]));
-    return { initiative: pub.initiative, handouts, wiki, map: pub.map, calendar: pub.calendar, party: pub.party || [], card, feed, homebrew, recap: client.display ? null : pub.recap || null, you: client.player || null };
+    return { initiative: pub.initiative, handouts, wiki, map: pub.map, calendar: pub.calendar, party: pub.party || [], card, feed, homebrew, recap: client.display ? null : pub.recap || null, notices: client.display ? [] : (pub.notices || []).filter(n => forMe(n.to)), you: client.player || null };
   }
   if (typeof module !== 'undefined' && module.exports) module.exports = { viewFor };
   else root.viewFor = viewFor;
