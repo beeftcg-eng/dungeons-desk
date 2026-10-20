@@ -6,6 +6,15 @@
 window.WhatsNew = (() => {
   const LOG = [
     {
+      v: '1.5.2',
+      dm: [
+        '🎞️ <b>Animated maps</b>: add a Dungeon Alchemist video (MP4 or WebM) as a map, and pick its <code>.dd2vtt</code> file with it to set the grid exactly. Players on the same Wi-Fi see it move.',
+      ],
+      player: [
+        '🎞️ Maps can be <b>animated</b> now. Tap ⏸ on the map to keep it still and save battery.',
+      ],
+    },
+    {
       v: '1.5.1',
       dm: [
         '✔ <b>Spell checking</b> in English and Spanish at once: misspelled words are underlined, and right-click gives suggestions or adds a name to the dictionary. Choose the languages in ⚙ Settings → ✔ Spelling.',

@@ -378,20 +378,32 @@
   }
 
   // ---------- Map ----------
-  let mapView = null, mapImg = null, mapImgUrl = null, tokenImgs = {}, lastMapId = null, pointers = new Map(), pinch = null;
+  let mapView = null, mapImg = null, mapImgUrl = null, mapVid = null, mapVidUrl = null, tokenImgs = {}, lastMapId = null, pointers = new Map(), pinch = null;
   function renderMap() {
     const el = $('#map'), m = data.map;
     el.classList.toggle('has-map', !!m);
     if (!m) { el.innerHTML = '<div class="empty"><div class="big">🗺</div>No map is being shown right now.</div>'; lastMapId = null; return; }
     if (!el.querySelector('canvas')) {
-      el.innerHTML = '<div class="mapwrap"><canvas></canvas><div class="mapname"></div><div class="maphint" hidden></div><div class="mapbtns"><button data-z="1.25">＋</button><button data-z="0.8">－</button><button data-z="fit">⤢</button></div>' +
+      el.innerHTML = '<div class="mapwrap"><canvas></canvas><div class="mapname"></div><div class="maphint" hidden></div><div class="mapbtns"><button data-z="1.25">＋</button><button data-z="0.8">－</button><button data-z="fit">⤢</button><button data-z="anim" hidden></button></div>' +
         (display ? '' : '<div class="maptools"><button data-t="move" class="on">✋ Move</button><button data-t="measure">📏 Measure</button><button data-t="ping">📍 Ping</button></div>') + '</div>';
-      el.querySelectorAll('.mapbtns button').forEach(b => b.addEventListener('click', () => { if (b.dataset.z === 'fit') fitMap(true); else zoomAt(Number(b.dataset.z)); }));
+      el.querySelectorAll('.mapbtns button').forEach(b => b.addEventListener('click', () => {
+        if (b.dataset.z === 'anim') { store.set('dm.map.still', store.get('dm.map.still') ? '' : '1'); renderMap(); }
+        else if (b.dataset.z === 'fit') fitMap(true); else zoomAt(Number(b.dataset.z));
+      }));
       el.querySelectorAll('.maptools button').forEach(b => b.addEventListener('click', () => { mapTool = b.dataset.t; el.querySelectorAll('.maptools button').forEach(x => x.classList.toggle('on', x === b)); hint({ move: myTokens().length ? 'Drag your token to move it' : 'Drag to look around', measure: 'Drag to measure', ping: 'Tap to ping' }[mapTool]); }));
       bindMap(el.querySelector('canvas'));
     }
     el.querySelector('.mapname').textContent = m.name;
     if (m.image !== mapImgUrl) { mapImgUrl = m.image; mapImg = new Image(); mapImg.onload = drawMap; mapImg.src = m.image; }
+    // Animated maps: the video plays behind everything unless this phone chose the still picture (⏸).
+    const still = !!store.get('dm.map.still'), vurl = m.video && !still ? m.video : null, ab = el.querySelector('[data-z=anim]');
+    ab.hidden = !m.video; ab.textContent = still ? '▶' : '⏸'; ab.title = still ? 'Animate the map' : 'Still picture (saves battery)';
+    if (vurl !== mapVidUrl) {
+      if (mapVid) { mapVid.pause(); mapVid.removeAttribute('src'); mapVid.load(); }
+      mapVidUrl = vurl; mapVid = null;
+      if (vurl) { mapVid = Object.assign(document.createElement('video'), { muted: true, loop: true, playsInline: true, autoplay: true, preload: 'auto' }); mapVid.setAttribute('playsinline', ''); mapVid.onloadeddata = drawMap; mapVid.src = vurl; }
+      drawMap();
+    }
     (m.tokens || []).forEach(t => { if (t.img && !tokenImgs[t.img]) { const i = new Image(); i.onload = drawMap; i.src = t.img; tokenImgs[t.img] = i; } });
     if (m.id !== lastMapId) { lastMapId = m.id; mapView = null; if (currentTab !== 'map' && !display) $('#mapbadge').hidden = false; }
     fitMap(false);
@@ -419,7 +431,7 @@
     const now = Date.now();
     const pings = (m.pings || []).map(pg => { const k = pg.x + ',' + pg.y + ',' + pg.t; if (!pingSeen.has(k)) pingSeen.set(k, now); return { ...pg, seen: pingSeen.get(k) }; });
     const tokens = (m.tokens || []).map(t => movingTok && movingTok.id === t.id ? { ...t, x: movingTok.x, y: movingTok.y } : t);
-    MapRender.draw(ctx, { ...m, tokens, pings, rulers: [...(m.rulers || []), ...(myRuler ? [myRuler] : [])] }, { image: mapImg, tokenImages: tokenImgs, fogAlpha: 1, highlight: m.current, scale: mapView.s });
+    MapRender.draw(ctx, { ...m, tokens, pings, rulers: [...(m.rulers || []), ...(myRuler ? [myRuler] : [])] }, { image: mapVid && mapVid.readyState >= 2 ? mapVid : mapImg, tokenImages: tokenImgs, fogAlpha: 1, highlight: m.current, scale: mapView.s });
   }
   // ---------- Map tools on the phone ----------
   let mapTool = 'move', movingTok = null, myRuler = null;
@@ -431,6 +443,16 @@
   setInterval(() => { if (data && data.map && (data.map.pings || []).length) drawMap(); }, 60);
   setInterval(() => { if (data && data.map && data.map.ping && Date.now() - data.map.ping.t < 4200) drawMap(); }, 50);
   window.addEventListener('resize', () => fitMap(false));
+  // Redraw on each new video frame while the map is on screen; pause it otherwise.
+  let lastFrame = -1;
+  (function tick() {
+    requestAnimationFrame(tick);
+    if (!mapVid) return;
+    const c = document.querySelector('#map canvas');
+    if (!c || !c.offsetParent || document.hidden) { if (!mapVid.paused) mapVid.pause(); return; }
+    if (mapVid.paused && !mapVid.error) mapVid.play().catch(() => {});
+    if (mapVid.currentTime !== lastFrame) { lastFrame = mapVid.currentTime; drawMap(); }
+  })();
   function bindMap(c) {
     c.addEventListener('pointerdown', (e) => {
       c.setPointerCapture(e.pointerId); pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });

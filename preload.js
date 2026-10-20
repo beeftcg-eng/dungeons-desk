@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 const call = (ch) => (...args) => ipcRenderer.invoke(ch, ...args);
 
@@ -20,7 +20,7 @@ contextBridge.exposeInMainWorld('dm', {
     exists: call('notes:exists'), delete: call('notes:delete'), rename: call('notes:rename'), mkdir: call('notes:mkdir'),
   },
   state: { load: call('state:load'), save: call('state:save') },
-  media: { save: call('media:save'), list: call('media:list'), read: call('media:read'), write: call('media:write'), delete: call('media:delete') },
+  media: { save: call('media:save'), saveVideo: (file, hint) => ipcRenderer.invoke('media:saveVideo', webUtils.getPathForFile(file), hint), list: call('media:list'), read: call('media:read'), write: call('media:write'), delete: call('media:delete') },
   file: { savePng: call('file:savePng') },
   print: { html: call('print:html') },
   server: {

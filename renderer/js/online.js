@@ -91,8 +91,10 @@ window.Online = (() => {
     (pub.party || []).forEach(n => names.set(n.toLowerCase(), n));
     members.forEach(m => { if (!names.has(m.player)) names.set(m.player, m.name); });
     const views = {};
+    // Animated maps stay on the LAN: online phones get the map's still picture (videos are far over the bucket's limit).
+    const still = pub.map && pub.map.video ? { ...pub, map: { ...pub.map, video: null } } : pub;
     for (const [key, name] of names) {
-      const json = JSON.stringify(viewFor(pub, { player: name }))
+      const json = JSON.stringify(viewFor(still, { player: name }))
         .replace(/"\/media\/([^"\\]+)"/g, (_, enc) => {
           const file = decodeURIComponent(enc), rest = `${c}/m/${file}`;
           need.set(rest, () => dm.media.read(file));

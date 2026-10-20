@@ -139,7 +139,7 @@
     const c = await get('campaigns', id);
     const notes = {}, media = {}, attachments = {};
     for (const n of await all('notes', inCampaign(id))) notes[n.path] = n.content;
-    for (const b of await all('blobs', inCampaign(id))) (b.kind === 'media' ? media : attachments)[b.name] = await toDataUrl(b.blob);
+    for (const b of await all('blobs', inCampaign(id))) if (IMAGE_EXT.test(b.name)) (b.kind === 'media' ? media : attachments)[b.name] = await toDataUrl(b.blob);
     const st = await get('state', id);
     const data = { format: 'dungeons-desk-campaign', version: 1, name: c.name, exported: new Date().toISOString(), folders: c.folders || [], notes, state: st ? st.data : {}, media, attachments };
     download(new Blob([JSON.stringify(data)], { type: 'application/json' }), `${fileName(c.name) || 'Campaign'}.ddcampaign.json`);
@@ -379,7 +379,16 @@ started: ${new Date().toISOString().slice(0, 10)}
         await saveBlob('media', name, dataUrl);
         return name;
       }),
-      list: r(async () => [...urls.media.keys()]),
+      // Animated maps: the picked file goes in as it is.
+      saveVideo: r(async (file, hint = 'map') => {
+        const ext = (/\.(mp4|m4v|webm)$/i.exec(file.name || '') || [])[1];
+        if (!ext) throw new Error('Unsupported video');
+        const name = `${String(hint).replace(/[^a-z0-9-]/gi, '').slice(0, 24) || 'video'}-${Date.now().toString(36)}.${ext.toLowerCase()}`;
+        await put('blobs', { cid, kind: 'media', name, blob: file });
+        urls.media.set(name, URL.createObjectURL(file));
+        return name;
+      }),
+      list: r(async () => [...urls.media.keys()].filter(n => IMAGE_EXT.test(n))), // videos don't sync
       read: r(async (name) => { const b = await get('blobs', [cid, 'media', String(name).split('/').pop()]); if (!b) throw new Error('Not found'); return toDataUrl(b.blob); }),
       write: r(async (name, dataUrl) => { name = String(name).split('/').pop(); if (!/\.(png|jpe?g|gif|webp)$/i.test(name)) throw new Error('Unsupported image'); await saveBlob('media', name, dataUrl); return true; }),
       delete: r(async (name) => dropBlob('media', String(name).split('/').pop())),

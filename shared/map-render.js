@@ -1,5 +1,5 @@
 // Battle map drawing shared by the DM app and the phone/TV page.
-// A map: { w, h, grid: { size, ox, oy, show, color }, fog: { enabled, ops: [] }, tokens: [{ name, x, y, size, img, color, hidden }] }
+// A map: { w, h, image, video?, grid: { size, ox, oy, show, color }, fog: { enabled, ops: [] }, tokens: [{ name, x, y, size, img, color, hidden }] }
 // Also: drawings [{ color, w, pts }], templates (AoE) [{ kind: circle|cone|line|cube, x, y, x2, y2, color }],
 // rulers [{ x, y, x2, y2, by }] and pings [{ x, y, t, color, by }]. 1 grid square = 5 ft.
 // Fog ops are applied in order: { t: 'r' (reveal) | 'h' (hide), s: 'rect', x, y, w, h } | { t, s: 'brush', r, pts: [x, y, ...] } | { t: 'r', s: 'all' }
@@ -113,7 +113,8 @@
   // ctx must already be transformed so 1 unit = 1 map pixel.
   function draw(ctx, map, { image, tokenImages = {}, fogAlpha = 1, highlight = null, showHidden = false, ping = null, scale = 1 } = {}) {
     ctx.fillStyle = '#111'; ctx.fillRect(0, 0, map.w, map.h);
-    if (image && image.complete) ctx.drawImage(image, 0, 0, map.w, map.h);
+    // `image` is an <img>, or a <video> for animated maps (Dungeon Alchemist exports), drawn once it has a frame.
+    if (image && (image.tagName === 'VIDEO' ? image.readyState >= 2 : image.complete && image.naturalWidth)) ctx.drawImage(image, 0, 0, map.w, map.h);
     const g = map.grid || {};
     if (g.show && g.size > 4) {
       ctx.strokeStyle = g.color || 'rgba(0,0,0,.35)'; ctx.lineWidth = 1 / scale;

@@ -10,7 +10,8 @@ const fs = require('fs');
 const path = require('path');
 const { viewFor } = require('./shared/view-for');
 
-const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.jpg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml' };
+const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.jpg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.mp4': 'video/mp4', '.m4v': 'video/mp4', '.webm': 'video/webm' };
+const VIDEO = /\.(mp4|m4v|webm)$/i;
 
 class PlayerServer {
   constructor({ staticDir, sharedDir, mediaDir, vaultDir }) {
@@ -80,11 +81,26 @@ class PlayerServer {
     for (const c of this.clients) this.send(c);
   }
 
-  serveFile(res, file) {
+  serveFile(res, file, req) {
+    // Animated maps are videos, often hundreds of MB: streamed, with Range requests so players can loop and seek.
+    if (VIDEO.test(file)) return this.serveVideo(res, file, req);
     fs.readFile(file, (err, data) => {
       if (err) { res.writeHead(404); return res.end('Not found'); }
       res.writeHead(200, { 'Content-Type': MIME[path.extname(file).toLowerCase()] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
       res.end(data);
+    });
+  }
+
+  serveVideo(res, file, req) {
+    fs.stat(file, (err, st) => {
+      if (err || !st.isFile()) { res.writeHead(404); return res.end('Not found'); }
+      const head = { 'Content-Type': MIME[path.extname(file).toLowerCase()], 'Accept-Ranges': 'bytes', 'Cache-Control': 'no-cache' };
+      const m = /^bytes=(\d*)-(\d*)$/.exec((req && req.headers.range) || '');
+      if (!m || (!m[1] && !m[2])) { res.writeHead(200, { ...head, 'Content-Length': st.size }); return fs.createReadStream(file).pipe(res); }
+      let start = m[1] ? Number(m[1]) : Math.max(0, st.size - Number(m[2])), end = m[1] && m[2] ? Math.min(Number(m[2]), st.size - 1) : st.size - 1;
+      if (start > end || start >= st.size) { res.writeHead(416, { 'Content-Range': `bytes */${st.size}` }); return res.end(); }
+      res.writeHead(206, { ...head, 'Content-Range': `bytes ${start}-${end}/${st.size}`, 'Content-Length': end - start + 1 });
+      fs.createReadStream(file, { start, end }).pipe(res);
     });
   }
 
@@ -187,10 +203,10 @@ class PlayerServer {
       const base = path.resolve(this.vaultDir());
       const full = path.resolve(base, rel);
       if (!full.startsWith(base + path.sep)) { res.writeHead(404); return res.end(); }
-      return this.serveFile(res, full);
+      return this.serveFile(res, full, req);
     }
 
-    if (p === '/' || p === '/index.html') return this.serveFile(res, path.join(this.staticDir, 'index.html'));
+    if (p === '/' || p === '/index.html') return this.serveFile(res, path.join(this.staticDir, 'index.html'), req);
 
     const pick = (base, rel) => {
       const full = path.resolve(base, rel);
@@ -201,7 +217,7 @@ class PlayerServer {
     else if (p.startsWith('/shared/')) file = pick(this.sharedDir, p.slice(8));
     else file = pick(this.staticDir, p.slice(1));
     if (!file) { res.writeHead(404); return res.end(); }
-    this.serveFile(res, file);
+    this.serveFile(res, file, req);
   }
 }
 

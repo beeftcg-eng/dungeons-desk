@@ -67,7 +67,7 @@ const head = (manifest, title) => `<meta name="viewport" content="width=device-w
 <link rel="manifest" href="${manifest}">
 <link rel="icon" href="../icons/icon-32.png">
 <link rel="apple-touch-icon" href="../icons/icon-256.png">`;
-const CSP = `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://api.open5e.com https://cinxclbsgamdprftcbek.supabase.co; frame-src 'self' blob: data:; worker-src 'self'; manifest-src 'self'`;
+const CSP = `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; media-src 'self' blob:; connect-src 'self' https://api.open5e.com https://cinxclbsgamdprftcbek.supabase.co; frame-src 'self' blob: data:; worker-src 'self'; manifest-src 'self'`;
 
 let dm = fs.readFileSync(rel('renderer/index.html'), 'utf8');
 dm = dm.replace(/<meta http-equiv="Content-Security-Policy" content="[^"]*">/, `<meta http-equiv="Content-Security-Policy" content="${CSP}">\n${head('manifest.json', 'DM Desk')}`);

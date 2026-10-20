@@ -497,6 +497,15 @@ function registerIpc() {
     return name;
   });
 
+  // Animated maps: a video is copied straight from where the DM picked it (too big to send as a data URL).
+  ipcMain.handle('media:saveVideo', (_e, from, hint = 'map') => {
+    const ext = path.extname(String(from)).slice(1).toLowerCase();
+    if (!['mp4', 'm4v', 'webm'].includes(ext) || !fs.statSync(from).isFile()) throw new Error('Unsupported video');
+    const name = `${String(hint).replace(/[^a-z0-9-]/gi, '').slice(0, 24) || 'video'}-${Date.now().toString(36)}.${ext}`;
+    fs.copyFileSync(from, path.join(mediaDir(), name));
+    return name;
+  });
+
   // Copy token PNGs from the media folder into a folder the user picks (for a virtual tabletop).
   ipcMain.handle('tokens:exportFiles', async (_e, items) => {
     const r = await dialog.showOpenDialog(win, { title: 'Choose a folder for the token PNGs', properties: ['openDirectory', 'createDirectory'] });

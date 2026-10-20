@@ -1,11 +1,13 @@
 // Battle maps with fog of war, measuring, drawing, AoE templates and pings.
 // Players see the map on the TV window and their phones, and can move their own tokens
 // (fog clears around player tokens as they move, if the DM turns that on).
+// Animated maps (Dungeon Alchemist's video exports) keep a still picture in `image` and the video in `video`; the
+// still is what online tables, synced devices and the list use. A Universal VTT file (.dd2vtt) gives the exact grid.
 window.Maps = (() => {
   const { h, toast } = U;
   let els = {}, tool = 'move', aoeKind = 'circle', color = '#ff5252', brush = 60;
   let view = { s: 1, x: 0, y: 0 }, drag = null, stroke = null, rectPrev = null, ruler = null, aoePrev = null;
-  const images = {}; // url -> Image
+  const images = {}, videos = {}; // url -> Image / <video>
   const maps = () => (Store.get().maps = Store.get().maps || []);
   const active = () => maps().find(m => m.id === Store.get().activeMap) || null;
   const COLORS = ['#8b1e1e', '#1e5b8b', '#2b7a3d', '#6b2b8b', '#8b6a1e', '#1e7a7a', '#555c66', '#a3461f'];
@@ -24,6 +26,30 @@ window.Maps = (() => {
     if (!images[url]) { const i = new Image(); i.onload = () => render(); i.src = url; images[url] = i; }
     return images[url];
   }
+  function vid(url) {
+    if (!url) return null;
+    if (!videos[url]) {
+      const v = Object.assign(document.createElement('video'), { muted: true, loop: true, playsInline: true, preload: 'auto' });
+      v.onloadeddata = () => render(); v.src = url; videos[url] = v;
+    }
+    return videos[url];
+  }
+  const animated = (m) => !!(m && m.video && m.animate !== false);
+  // The picture to draw: the video once it has a frame, otherwise the still.
+  function background(m) {
+    const v = animated(m) ? vid(App.mediaUrl(m.video)) : null;
+    return v && v.readyState >= 2 ? v : img(App.mediaUrl(m.image));
+  }
+  // Redraw on each new video frame while the map view is on screen; pause every other video.
+  let lastFrame = -1;
+  function tick() {
+    requestAnimationFrame(tick);
+    const m = active(), v = animated(m) ? videos[App.mediaUrl(m.video)] : null, showing = !!(els.canvas && els.canvas.offsetParent);
+    for (const x of Object.values(videos)) if ((x !== v || !showing) && !x.paused) x.pause();
+    if (!v || !showing || v.error) return;
+    if (v.paused) v.play().catch(() => {});
+    if (v.currentTime !== lastFrame) { lastFrame = v.currentTime; render(); }
+  }
   const save = U.debounce(() => { Store.save(); publishToPlayers(); }, 120);
   const recentPings = (m) => (m.pings || []).filter(p => Date.now() - p.t < 6000);
 
@@ -34,7 +60,7 @@ window.Maps = (() => {
     upgrade(m);
     const ini = Store.get().initiative, cur = ini.active && ini.combatants[ini.turn];
     return {
-      id: m.id, name: m.name, image: '/media/' + encodeURIComponent(m.image), w: m.w, h: m.h, grid: m.grid,
+      id: m.id, name: m.name, image: '/media/' + encodeURIComponent(m.image), video: animated(m) ? '/media/' + encodeURIComponent(m.video) : null, w: m.w, h: m.h, grid: m.grid,
       fog: m.fog && m.fog.enabled ? m.fog : { enabled: false, ops: [] },
       tokens: m.tokens.filter(t => !t.hidden).map(t => ({ id: t.id, name: t.name, owner: t.owner || null, x: t.x, y: t.y, size: t.size, color: t.color, img: t.file ? '/media/' + encodeURIComponent(t.file) : null })),
       drawings: m.shareDrawings ? m.drawings : [], templates: m.shareDrawings ? m.templates : [],
@@ -98,6 +124,7 @@ window.Maps = (() => {
     dm.onPlayerAction(playerAction);
     Store.onLoad(() => { drawAll(); fit(true); });
     drawAll();
+    requestAnimationFrame(tick);
     setInterval(() => { const m = active(); if (m && (m.pings || []).some(p => Date.now() - p.t < 4200)) render(); }, 50);
   }
   const onShow = () => { drawAll(); fit(true); };
@@ -106,26 +133,95 @@ window.Maps = (() => {
 
   function drawList() {
     els.list.innerHTML = '';
-    if (!maps().length) els.list.append(h('p.dim', 'No maps yet. Add a battle map, dungeon or region image.'));
+    if (!maps().length) els.list.append(h('p.dim', 'No maps yet. Add a battle map, dungeon or region image, or an animated map video.'));
     maps().forEach(m => els.list.append(h('div.ho-item' + (m.id === Store.get().activeMap ? '.active' : ''), { onclick: () => { Store.get().activeMap = m.id; Store.save(); publishToPlayers(); drawAll(); fit(true); } },
-      h('div.ho-item-title', m.name), m.id === Store.get().activeMap && Store.get().mapShown ? h('span.chip.live', 'Players see this') : null)));
+      h('div.ho-item-title', m.name, m.video ? h('span.dim', { title: 'Animated map' }, ' 🎞️') : null), m.id === Store.get().activeMap && Store.get().mapShown ? h('span.chip.live', 'Players see this') : null)));
   }
 
-  function addMap() {
-    const file = h('input', { type: 'file', accept: 'image/*', style: 'display:none', onchange: async (e) => {
-      const f = e.target.files[0]; if (!f) return;
-      const url = await U.readFileAsDataUrl(f);
-      const im = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
-      const name = await U.prompt('Map name', f.name.replace(/\.[^.]+$/, ''));
+  // ---------- Adding maps: a picture, a video, a Universal VTT file, or a video with its .dd2vtt ----------
+  const MAP_FILES = 'image/*,video/mp4,video/webm,.mp4,.m4v,.webm,.dd2vtt,.uvtt,.df2vtt';
+  const isVideo = (f) => /\.(mp4|m4v|webm)$/i.test(f.name);
+  const isVtt = (f) => /\.(dd2vtt|uvtt|df2vtt)$/i.test(f.name);
+  const pickMany = (accept) => new Promise((res) => {
+    const inp = h('input', { type: 'file', accept, multiple: true, style: 'display:none' });
+    inp.addEventListener('change', () => { res([...inp.files]); inp.remove(); });
+    document.body.append(inp); inp.click();
+  });
+  const loadImage = (url) => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('That picture could not be read')); i.src = url; });
+  // Universal VTT (Dungeon Alchemist, Dungeondraft…): JSON with the grid and the map as a base64 picture.
+  async function readVtt(f) {
+    let j; try { j = JSON.parse(await f.text()); } catch { throw new Error(`${f.name} isn't a Universal VTT file`); }
+    const r = (j && j.resolution) || {}, ppg = Number(r.pixels_per_grid), size = r.map_size || {}, o = r.map_origin || {};
+    if (!(ppg > 0)) throw new Error(`${f.name} has no grid size`);
+    const b64 = typeof j.image === 'string' ? j.image.replace(/^data:[^,]*,/, '').replace(/\s+/g, '') : '';
+    const type = b64.startsWith('/9j/') ? 'jpeg' : b64.startsWith('UklGR') ? 'webp' : 'png';
+    return { ppg, cols: Number(size.x) || 0, ox: Number(o.x) || 0, oy: Number(o.y) || 0, still: b64 ? `data:image/${type};base64,${b64}` : null };
+  }
+  // The VTT's grid scaled to a map `w` pixels wide (the picture or video may be exported at another size).
+  function vttGrid(v, w) {
+    const size = Math.round(v.ppg * (v.cols ? w / (v.cols * v.ppg) : 1) * 100) / 100;
+    const off = (n) => Math.round(((-n * size) % size + size) % size * 100) / 100;
+    return { size, ox: off(v.ox), oy: off(v.oy) };
+  }
+  // A video's size and a still frame from it (used as the map's picture everywhere the video can't go).
+  async function videoInfo(file) {
+    const url = URL.createObjectURL(file);
+    try {
+      const v = Object.assign(document.createElement('video'), { muted: true, preload: 'auto', src: url });
+      await new Promise((res, rej) => { v.onloadeddata = res; v.onerror = () => rej(new Error(`${file.name} can't be played. Export it as MP4 or WebM.`)); });
+      v.currentTime = Math.min(0.5, (v.duration || 1) / 2);
+      await new Promise((res) => { v.onseeked = res; setTimeout(res, 3000); });
+      const c = h('canvas', { width: v.videoWidth, height: v.videoHeight });
+      c.getContext('2d').drawImage(v, 0, 0);
+      return { w: v.videoWidth, h: v.videoHeight, still: c.toDataURL('image/jpeg', 0.88) };
+    } finally { URL.revokeObjectURL(url); }
+  }
+  // Big lossless VTT pictures (often 20 MB+) become JPEGs, so they sync and reach online tables.
+  async function smaller(dataUrl) {
+    if (dataUrl.length < 8e6) return dataUrl;
+    const im = await loadImage(dataUrl), c = h('canvas', { width: im.naturalWidth, height: im.naturalHeight });
+    c.getContext('2d').drawImage(im, 0, 0);
+    return c.toDataURL('image/jpeg', 0.9);
+  }
+
+  async function addMap() {
+    const files = await pickMany(MAP_FILES);
+    if (!files.length) return;
+    const vttFile = files.find(isVtt), video = files.find(isVideo), picture = files.find(f => /^image\//.test(f.type) && !isVtt(f));
+    try {
+      const vtt = vttFile && await readVtt(vttFile), clip = video && await videoInfo(video);
+      const still = picture ? await U.readFileAsDataUrl(picture) : vtt && vtt.still ? await smaller(vtt.still) : clip && clip.still;
+      if (!still) return toast('Pick a map picture, a video or a .dd2vtt file', 'err');
+      const im = await loadImage(still), w = im.naturalWidth, hh = im.naturalHeight;
+      const name = await U.prompt('Map name', (video || vttFile || picture).name.replace(/\.[^.]+$/, ''));
       if (!name) return;
-      const stored = await dm.media.save(url, 'map');
-      const m = upgrade({ id: U.uid(), name, image: stored, w: im.naturalWidth, h: im.naturalHeight,
-        grid: { size: Math.round(Math.min(im.naturalWidth, im.naturalHeight) / 20), ox: 0, oy: 0, show: true, color: 'rgba(0,0,0,0.35)' },
+      toast(video ? 'Copying the video…' : 'Adding the map…');
+      const m = upgrade({ id: U.uid(), name, image: await dm.media.save(still, 'map'), video: video ? await dm.media.saveVideo(video, 'map') : null, w, h: hh,
+        grid: { ...(vtt ? vttGrid(vtt, w) : { size: Math.round(Math.min(w, hh) / 20), ox: 0, oy: 0 }), show: true, color: 'rgba(0,0,0,0.35)' },
         fog: { enabled: true, ops: [] } });
       maps().push(m); Store.get().activeMap = m.id; Store.save(); drawAll(); fit(true);
-      toast('Map added. The whole map starts hidden: reveal areas, or let player tokens clear the fog as they move.');
-    } });
-    document.body.append(file); file.click(); setTimeout(() => file.remove(), 60000);
+      toast((video ? 'Animated map added.' : 'Map added.') + (vtt ? ' The grid comes from the .dd2vtt file.' : video ? ' For an exact grid, use 📐 Grid from .dd2vtt.' : '') + ' The whole map starts hidden: reveal areas, or let player tokens clear the fog as they move.');
+    } catch (e) { toast(e.message || String(e), 'err'); }
+  }
+  async function addAnimation(m) {
+    const f = await U.pickFile('video/mp4,video/webm,.mp4,.m4v,.webm');
+    if (!f) return;
+    try {
+      const clip = await videoInfo(f);
+      if (Math.abs(clip.w / clip.h - m.w / m.h) > 0.02) toast('The video\'s shape doesn\'t match the map, so it\'s stretched to fit. Export the same area as the picture.', 'err');
+      m.video = await dm.media.saveVideo(f, 'map'); m.animate = true;
+      save(); drawAll();
+      toast('Animation added. Players on the same Wi-Fi see it move; online tables get the still picture.');
+    } catch (e) { toast(e.message || String(e), 'err'); }
+  }
+  async function gridFromVtt(m) {
+    const f = await U.pickFile('.dd2vtt,.uvtt,.df2vtt');
+    if (!f) return;
+    try {
+      Object.assign(m.grid, vttGrid(await readVtt(f), m.w));
+      save(); drawSide(); render();
+      toast(`Grid set: ${m.grid.size} px squares`);
+    } catch (e) { toast(e.message || String(e), 'err'); }
   }
 
   function setTool(id) { tool = id; drawToolbar(); els.canvas.style.cursor = id === 'move' ? 'grab' : id === 'erase' ? 'not-allowed' : 'crosshair'; }
@@ -188,10 +284,16 @@ window.Maps = (() => {
         h('p.hint', 'One square = 5 ft. Match the square size to the map\'s printed grid so tokens snap to it and measurements are right.')),
       h('div.card',
         h('h3', 'Map'),
+        m.video ? h('label.chk', { title: 'Untick to show the still picture (saves battery on phones)' }, h('input', { type: 'checkbox', checked: animated(m), onchange: (e) => { m.animate = e.target.checked; save(); render(); } }), ' 🎞️ Animated') : null,
+        h('div.row',
+          m.video ? h('button.small', { onclick: () => { m.video = null; save(); drawAll(); }, title: 'Show only the still picture (the video file is kept)' }, '🎞️ Remove animation')
+            : h('button.small', { onclick: () => addAnimation(m), title: 'A video of this map, such as Dungeon Alchemist’s animated export' }, '🎞️ Add animation'),
+          h('button.small', { onclick: () => gridFromVtt(m), title: 'Match the grid exactly from a Universal VTT export (.dd2vtt)' }, '📐 Grid from .dd2vtt')),
         h('div.row',
           h('button.small', { onclick: async () => { const n = await U.prompt('Rename map', m.name); if (n) { m.name = n; save(); drawList(); } } }, '✏ Rename'),
           dm.isWeb ? null : h('button.small', { onclick: () => dm.server.openDisplay() }, '🖥 TV window'),
-          h('button.small.danger', { onclick: async () => { if (await U.confirm('Delete map', `Delete “${m.name}”? (The image file is kept.)`)) { Store.get().maps = maps().filter(x => x !== m); Store.get().activeMap = maps()[0] && maps()[0].id; save(); drawAll(); } } }, '🗑 Delete'))));
+          h('button.small.danger', { onclick: async () => { if (await U.confirm('Delete map', `Delete “${m.name}”? (The image file is kept.)`)) { Store.get().maps = maps().filter(x => x !== m); Store.get().activeMap = maps()[0] && maps()[0].id; save(); drawAll(); } } }, '🗑 Delete')),
+        h('p.hint', 'Dungeon Alchemist: export the video (MP4 or WebM) and the Universal VTT file (.dd2vtt), then pick both together under + New map.')));
   }
 
   function centerOfView() {
@@ -264,7 +366,7 @@ window.Maps = (() => {
     ctx.fillStyle = '#0d0b12'; ctx.fillRect(0, 0, els.canvas.width, els.canvas.height);
     if (!m) {
       ctx.fillStyle = '#9d94b3'; ctx.font = `${16 * devicePixelRatio}px sans-serif`; ctx.textAlign = 'center';
-      ctx.fillText('Add a map image to get started', els.canvas.width / 2, els.canvas.height / 2); return;
+      ctx.fillText('Add a map picture or video to get started', els.canvas.width / 2, els.canvas.height / 2); return;
     }
     upgrade(m);
     const d = devicePixelRatio;
@@ -274,7 +376,7 @@ window.Maps = (() => {
     m.tokens.forEach(t => { if (t.file) tokenImages[t.file] = img(App.mediaUrl(t.file)); });
     const drawn = { ...m, tokens: m.tokens.map(t => ({ ...t, img: t.file })), templates: aoePrev ? [...m.templates, aoePrev] : m.templates,
       drawings: stroke && stroke.pen ? [...m.drawings, stroke] : m.drawings, rulers: ruler ? [ruler] : [], pings: recentPings(m) };
-    MapRender.draw(ctx, drawn, { image: img(App.mediaUrl(m.image)), tokenImages, fogAlpha: 0.55, highlight: cur && cur.name, showHidden: true, scale: view.s });
+    MapRender.draw(ctx, drawn, { image: background(m), tokenImages, fogAlpha: 0.55, highlight: cur && cur.name, showHidden: true, scale: view.s });
     if (stroke && !stroke.pen) { ctx.save(); ctx.globalAlpha = 0.5; MapRender.applyOp(ctx, stroke.t === 'r' ? { ...stroke, t: 'h' } : stroke, m); ctx.restore(); }
     if (rectPrev) { ctx.save(); ctx.strokeStyle = rectPrev.t === 'r' ? '#8be08f' : '#ff8c84'; ctx.lineWidth = 2 / view.s; ctx.setLineDash([8 / view.s, 6 / view.s]); ctx.strokeRect(rectPrev.x, rectPrev.y, rectPrev.w, rectPrev.h); ctx.restore(); }
   }

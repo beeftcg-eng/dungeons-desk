@@ -22,16 +22,16 @@ const tests = [];
 const test = (name, fn) => tests.push([name, fn]);
 
 // One request. code: true adds the join code. Resolves { status, body }.
-function req(method, p, { code = true, body, player } = {}) {
+function req(method, p, { code = true, body, player, headers } = {}) {
   const q = new URLSearchParams();
   if (code) q.set('code', CODE);
   if (player) q.set('player', player);
   const full = p + (q.toString() ? (p.includes('?') ? '&' : '?') + q : '');
   return new Promise((resolve, reject) => {
-    const r = http.request({ host: '127.0.0.1', port, method, path: full, agent: false }, (res) => {
+    const r = http.request({ host: '127.0.0.1', port, method, path: full, agent: false, headers }, (res) => {
       let data = '';
       res.on('data', (c) => { data += c; });
-      res.on('end', () => resolve({ status: res.statusCode, body: data }));
+      res.on('end', () => resolve({ status: res.statusCode, body: data, headers: res.headers }));
     });
     r.on('error', (e) => (e.code === 'ECONNRESET' ? resolve({ status: 'reset', body: '' }) : reject(e)));
     if (body !== undefined) r.write(typeof body === 'string' ? body : JSON.stringify(body));
@@ -168,6 +168,19 @@ test('wiki images: only ones referenced by shared pages', async () => {
   assert.strictEqual((await req('GET', '/wiki-img/map.png', { code: false })).body, 'PNG');
   assert.strictEqual((await req('GET', '/wiki-img/secret.png', { code: false })).status, 404);
   assert.strictEqual((await req('GET', '/wiki-img/..%2foutside.txt', { code: false })).status, 404, 'listed but outside the vault');
+});
+
+test('animated map videos: streamed with byte ranges', async () => {
+  fs.writeFileSync(path.join(dirs.media, 'map-x.webm'), '0123456789');
+  const all = await req('GET', '/media/map-x.webm', { code: false });
+  assert.strictEqual(all.status, 200); assert.strictEqual(all.body, '0123456789');
+  assert.strictEqual(all.headers['content-type'], 'video/webm'); assert.strictEqual(all.headers['accept-ranges'], 'bytes');
+  const part = await req('GET', '/media/map-x.webm', { code: false, headers: { Range: 'bytes=2-5' } });
+  assert.strictEqual(part.status, 206); assert.strictEqual(part.body, '2345'); assert.strictEqual(part.headers['content-range'], 'bytes 2-5/10');
+  assert.strictEqual((await req('GET', '/media/map-x.webm', { code: false, headers: { Range: 'bytes=7-' } })).body, '789');
+  assert.strictEqual((await req('GET', '/media/map-x.webm', { code: false, headers: { Range: 'bytes=-3' } })).body, '789');
+  assert.strictEqual((await req('GET', '/media/map-x.webm', { code: false, headers: { Range: 'bytes=20-' } })).status, 416);
+  assert.strictEqual((await req('GET', '/media/nope.mp4', { code: false })).status, 404);
 });
 
 test('a new join code disconnects phones and rejects the old one', async () => {
