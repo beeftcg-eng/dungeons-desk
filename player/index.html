@@ -378,6 +378,7 @@
   }
 
   // ---------- Map ----------
+  let lastBlocked = null, lastMove = 0;
   let mapView = null, mapImg = null, mapImgUrl = null, mapVid = null, mapVidUrl = null, tokenImgs = {}, lastMapId = null, pointers = new Map(), pinch = null;
   function renderMap() {
     const el = $('#map'), m = data.map;
@@ -405,6 +406,9 @@
       drawMap();
     }
     (m.tokens || []).forEach(t => { if (t.img && !tokenImgs[t.img]) { const i = new Image(); i.onload = drawMap; i.src = t.img; tokenImgs[t.img] = i; } });
+    const blockedAt = m.blockedAt || 0; // the DM app put my token back: a wall was in the way
+    if (lastBlocked !== null && blockedAt !== lastBlocked && Date.now() - lastMove < 8000) { hint('A wall or a closed door is in the way'); buzz(60); }
+    lastBlocked = blockedAt;
     if (m.id !== lastMapId) { lastMapId = m.id; mapView = null; if (currentTab !== 'map' && !display) $('#mapbadge').hidden = false; }
     fitMap(false);
   }
@@ -488,7 +492,7 @@
         const x = (g.ox || 0) + (Math.round((movingTok.x - (g.ox || 0)) / g.size - n / 2) + n / 2) * g.size;
         const y = (g.oy || 0) + (Math.round((movingTok.y - (g.oy || 0)) / g.size - n / 2) + n / 2) * g.size;
         const t = m.tokens.find(t => t.id === movingTok.id); if (t) { t.x = x; t.y = y; }
-        post('move', { map: m.id, token: movingTok.id, x, y });
+        post('move', { map: m.id, token: movingTok.id, x, y }); lastMove = Date.now();
         movingTok = null; drawMap();
       }
       if (myRuler) { const r = myRuler; setTimeout(() => { if (myRuler === r) { myRuler = null; drawMap(); } }, 2000); }

@@ -6,6 +6,16 @@
 window.WhatsNew = (() => {
   const LOG = [
     {
+      v: '1.5.3',
+      dm: [
+        '🧱 <b>Walls, doors and line of sight</b>: a Dungeon Alchemist <code>.dd2vtt</code> file now brings its walls and doors. Fog clears only where player tokens can see, players can\'t walk through walls, and you click a door to open it. For maps you already have: 📐 Grid & walls from .dd2vtt.',
+        '💾 Daily backups leave out animated map videos, so they stay small, and 🧹 Clean up images also removes map videos no map uses.',
+      ],
+      player: [
+        '🧱 On maps with walls, you see only what your character can see, and walls and closed doors stop your token.',
+      ],
+    },
+    {
       v: '1.5.2',
       dm: [
         '🎞️ <b>Animated maps</b>: add a Dungeon Alchemist video (MP4 or WebM) as a map, and pick its <code>.dd2vtt</code> file with it to set the grid exactly. Players on the same Wi-Fi see it move.',

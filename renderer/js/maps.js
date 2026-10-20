@@ -2,7 +2,8 @@
 // Players see the map on the TV window and their phones, and can move their own tokens
 // (fog clears around player tokens as they move, if the DM turns that on).
 // Animated maps (Dungeon Alchemist's video exports) keep a still picture in `image` and the video in `video`; the
-// still is what online tables, synced devices and the list use. A Universal VTT file (.dd2vtt) gives the exact grid.
+// still is what online tables, synced devices and the list use. A Universal VTT file (.dd2vtt) gives the exact grid,
+// and its walls and doors: then fog clears only where player tokens can see, and players can't walk through walls.
 window.Maps = (() => {
   const { h, toast } = U;
   let els = {}, tool = 'move', aoeKind = 'circle', color = '#ff5252', brush = 60;
@@ -19,6 +20,7 @@ window.Maps = (() => {
     if (m.playerMove == null) m.playerMove = true;
     if (m.vision == null) m.vision = 6;
     if (m.shareDrawings == null) m.shareDrawings = true;
+    m.walls = m.walls || []; m.doors = m.doors || [];
     return m;
   }
   function img(url) {
@@ -65,7 +67,7 @@ window.Maps = (() => {
       tokens: m.tokens.filter(t => !t.hidden).map(t => ({ id: t.id, name: t.name, owner: t.owner || null, x: t.x, y: t.y, size: t.size, color: t.color, img: t.file ? '/media/' + encodeURIComponent(t.file) : null })),
       drawings: m.shareDrawings ? m.drawings : [], templates: m.shareDrawings ? m.templates : [],
       rulers: ruler ? [{ ...ruler, by: 'DM' }] : [],
-      pings: recentPings(m), playerMove: m.playerMove !== false,
+      pings: recentPings(m), playerMove: m.playerMove !== false, blockedAt: m.blockedAt || 0,
       current: cur && !cur.hidden ? cur.name : null,
     };
   }
@@ -94,7 +96,11 @@ window.Maps = (() => {
       if (!tk || (tk.owner || '').toLowerCase() !== who || m.playerMove === false || tk.hidden) return;
       const fx = tk.x, fy = tk.y;
       tk.x = U.clamp(a.x, 0, m.w); tk.y = U.clamp(a.y, 0, m.h);
-      snap(tk); revealAround(m, tk, fx, fy);
+      snap(tk);
+      // Through a wall or a closed door: put it back. blockedAt changes the view, so the phone (online ones too) gets
+      // the real position and says why.
+      if (walled(m) && MapRender.blocked(MapRender.segments(m), fx, fy, tk.x, tk.y)) { tk.x = fx; tk.y = fy; m.blockedAt = Date.now(); save(); return; }
+      revealAround(m, tk, fx, fy);
       save(); render();
     }
   }
@@ -103,10 +109,50 @@ window.Maps = (() => {
     const p = Store.get().party.find(x => (x.name || '').toLowerCase() === n);
     return (p && p.token) || (Store.get().playerTokens || {})[n] || null;
   };
-  // Clear fog in a swath along the token's path, `vision` squares wide.
+  const walled = (m) => m.walls.length > 0 && m.useWalls !== false;
+  // Clear fog around a player token as it moves, `vision` squares out: what it can see from along its path when the
+  // map has walls, otherwise a swath along the path.
   function revealAround(m, tk, fx = tk.x, fy = tk.y) {
     if (!tk.owner || !m.fog.enabled || !(m.vision > 0)) return;
+    const r = m.vision * m.grid.size;
+    if (walled(m)) {
+      const segs = MapRender.segments(m), steps = Math.min(6, Math.ceil(Math.hypot(tk.x - fx, tk.y - fy) / (m.grid.size * 2)));
+      for (let i = steps ? 1 : 0; i <= steps; i++) { // every two squares along the way (the start was seen already)
+        const k = steps ? i / steps : 1, x = Math.round(fx + (tk.x - fx) * k), y = Math.round(fy + (tk.y - fy) * k);
+        m.fog.ops.push({ t: 'r', s: 'sight', x, y, r: Math.round(r), polys: [MapRender.sight(segs, x, y, r)] });
+      }
+      return;
+    }
     m.fog.ops.push({ t: 'r', s: 'brush', r: m.vision * m.grid.size, pts: [Math.round(fx), Math.round(fy), Math.round(tk.x), Math.round(tk.y)] });
+  }
+
+  // What every player token on the map can see right now (after a door opens, or new walls).
+  function lookAround(m) { if (walled(m)) m.tokens.filter(t => t.owner && !t.hidden).forEach(t => revealAround(m, t)); }
+  function hitDoor(p) {
+    const m = active();
+    return m && [...m.doors].reverse().find(d => MapRender.distToSeg(p.x, p.y, d.pts) < 10 / view.s + m.grid.size * 0.1);
+  }
+  function toggleDoor(m, d) {
+    d.open = !d.open;
+    if (d.open) lookAround(m);
+    save(); render();
+  }
+  // DM only: doors (orange closed, green open) and, with Show walls, the walls.
+  function drawWalls(ctx, m) {
+    ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    if (m.showWalls) {
+      ctx.strokeStyle = 'rgba(64,196,255,.85)'; ctx.lineWidth = 3 / view.s; ctx.beginPath();
+      for (const w of m.walls) for (let i = 0; i < w.length; i += 2) i ? ctx.lineTo(w[i], w[i + 1]) : ctx.moveTo(w[i], w[i + 1]);
+      ctx.stroke();
+    }
+    for (const d of m.doors) {
+      const [x1, y1, x2, y2] = d.pts, col = d.open ? '#69f0ae' : '#ff7043';
+      ctx.strokeStyle = col; ctx.lineWidth = 6 / view.s; ctx.setLineDash(d.open ? [6 / view.s, 6 / view.s] : []);
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+      ctx.setLineDash([]); ctx.fillStyle = col;
+      ctx.beginPath(); ctx.arc((x1 + x2) / 2, (y1 + y2) / 2, 6 / view.s, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
   }
 
   // ---------- UI ----------
@@ -148,20 +194,20 @@ window.Maps = (() => {
     document.body.append(inp); inp.click();
   });
   const loadImage = (url) => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('That picture could not be read')); i.src = url; });
-  // Universal VTT (Dungeon Alchemist, Dungeondraft…): JSON with the grid and the map as a base64 picture.
+  // Universal VTT (Dungeon Alchemist, Dungeondraft…): read by MapRender.fromVtt().
   async function readVtt(f) {
     let j; try { j = JSON.parse(await f.text()); } catch { throw new Error(`${f.name} isn't a Universal VTT file`); }
-    const r = (j && j.resolution) || {}, ppg = Number(r.pixels_per_grid), size = r.map_size || {}, o = r.map_origin || {};
-    if (!(ppg > 0)) throw new Error(`${f.name} has no grid size`);
-    const b64 = typeof j.image === 'string' ? j.image.replace(/^data:[^,]*,/, '').replace(/\s+/g, '') : '';
-    const type = b64.startsWith('/9j/') ? 'jpeg' : b64.startsWith('UklGR') ? 'webp' : 'png';
-    return { ppg, cols: Number(size.x) || 0, ox: Number(o.x) || 0, oy: Number(o.y) || 0, still: b64 ? `data:image/${type};base64,${b64}` : null };
+    const v = MapRender.fromVtt(j);
+    if (!v) throw new Error(`${f.name} has no grid size`);
+    return v;
   }
-  // The VTT's grid scaled to a map `w` pixels wide (the picture or video may be exported at another size).
-  function vttGrid(v, w) {
-    const size = Math.round(v.ppg * (v.cols ? w / (v.cols * v.ppg) : 1) * 100) / 100;
-    const off = (n) => Math.round(((-n * size) % size + size) % size * 100) / 100;
-    return { size, ox: off(v.ox), oy: off(v.oy) };
+  // The VTT's grid, walls and doors onto map m (the picture or video may be exported at another size).
+  function applyVtt(m, v) {
+    const l = MapRender.layout(v, m.w);
+    Object.assign(m.grid, l.grid);
+    m.walls = l.walls; m.doors = l.doors;
+    // With walls, sight is what limits the fog, so see further than the default 6 squares.
+    if (m.walls.length && m.vision === 6) m.vision = 20;
   }
   // A video's size and a still frame from it (used as the map's picture everywhere the video can't go).
   async function videoInfo(file) {
@@ -197,10 +243,11 @@ window.Maps = (() => {
       if (!name) return;
       toast(video ? 'Copying the video…' : 'Adding the map…');
       const m = upgrade({ id: U.uid(), name, image: await dm.media.save(still, 'map'), video: video ? await dm.media.saveVideo(video, 'map') : null, w, h: hh,
-        grid: { ...(vtt ? vttGrid(vtt, w) : { size: Math.round(Math.min(w, hh) / 20), ox: 0, oy: 0 }), show: true, color: 'rgba(0,0,0,0.35)' },
+        grid: { size: Math.round(Math.min(w, hh) / 20), ox: 0, oy: 0, show: true, color: 'rgba(0,0,0,0.35)' },
         fog: { enabled: true, ops: [] } });
+      if (vtt) applyVtt(m, vtt);
       maps().push(m); Store.get().activeMap = m.id; Store.save(); drawAll(); fit(true);
-      toast((video ? 'Animated map added.' : 'Map added.') + (vtt ? ' The grid comes from the .dd2vtt file.' : video ? ' For an exact grid, use 📐 Grid from .dd2vtt.' : '') + ' The whole map starts hidden: reveal areas, or let player tokens clear the fog as they move.');
+      toast((video ? 'Animated map added.' : 'Map added.') + (vtt ? ` The grid${m.walls.length ? ', walls and doors come' : ' comes'} from the .dd2vtt file.` : video ? ' For an exact grid and walls, use 📐 Grid & walls from .dd2vtt.' : '') + ' The whole map starts hidden: reveal areas, or let player tokens clear the fog as they move.');
     } catch (e) { toast(e.message || String(e), 'err'); }
   }
   async function addAnimation(m) {
@@ -218,9 +265,9 @@ window.Maps = (() => {
     const f = await U.pickFile('.dd2vtt,.uvtt,.df2vtt');
     if (!f) return;
     try {
-      Object.assign(m.grid, vttGrid(await readVtt(f), m.w));
+      applyVtt(m, await readVtt(f));
       save(); drawSide(); render();
-      toast(`Grid set: ${m.grid.size} px squares`);
+      toast(`Grid set: ${m.grid.size} px squares` + (m.walls.length ? `, with walls and ${m.doors.length} door${m.doors.length === 1 ? '' : 's'}` : ''));
     } catch (e) { toast(e.message || String(e), 'err'); }
   }
 
@@ -276,6 +323,12 @@ window.Maps = (() => {
           h('select.small', { title: 'Size in squares', onchange: (e) => { tk.size = Number(e.target.value); save(); render(); } }, [0.5, 1, 2, 3, 4].map(sz => h('option', { value: sz, selected: (tk.size || 1) === sz }, `${sz}×`))),
           h('button.icon', { title: tk.hidden ? 'Hidden from players' : 'Visible to players', onclick: () => { tk.hidden = !tk.hidden; save(); drawSide(); render(); } }, tk.hidden ? '🙈' : '👁'),
           h('button.icon', { title: 'Remove', onclick: () => { m.tokens = tokens.filter(x => x !== tk); save(); drawSide(); render(); } }, '✕'))))),
+      m.walls.length ? h('div.card',
+        h('h3', '🧱 Walls & doors'),
+        h('label.chk', h('input', { type: 'checkbox', checked: m.useWalls !== false, onchange: (e) => { m.useWalls = e.target.checked; save(); drawSide(); } }), ' Walls block sight and movement'),
+        h('label.chk', h('input', { type: 'checkbox', checked: !!m.showWalls, onchange: (e) => { m.showWalls = e.target.checked; save(); render(); } }), ' Show walls (only you see them)'),
+        h('p.hint', `${m.walls.length} wall${m.walls.length === 1 ? '' : 's'} and ${m.doors.length} door${m.doors.length === 1 ? '' : 's'}. Player tokens clear the fog only where they can see, and players can't move through walls or closed doors. Click a door to open or close it.`),
+        h('button.small', { onclick: () => { lookAround(m); save(); render(); }, title: 'Clear the fog each player token can see from where it stands' }, '👁 Reveal what tokens see')) : null,
       h('div.card',
         h('h3', 'Grid'),
         h('label.chk', h('input', { type: 'checkbox', checked: m.grid.show, onchange: (e) => { m.grid.show = e.target.checked; save(); render(); } }), ' Show grid'),
@@ -288,7 +341,7 @@ window.Maps = (() => {
         h('div.row',
           m.video ? h('button.small', { onclick: () => { m.video = null; save(); drawAll(); }, title: 'Show only the still picture (the video file is kept)' }, '🎞️ Remove animation')
             : h('button.small', { onclick: () => addAnimation(m), title: 'A video of this map, such as Dungeon Alchemist’s animated export' }, '🎞️ Add animation'),
-          h('button.small', { onclick: () => gridFromVtt(m), title: 'Match the grid exactly from a Universal VTT export (.dd2vtt)' }, '📐 Grid from .dd2vtt')),
+          h('button.small', { onclick: () => gridFromVtt(m), title: 'Match the grid exactly, and add walls and doors, from a Universal VTT export (.dd2vtt)' }, '📐 Grid & walls from .dd2vtt')),
         h('div.row',
           h('button.small', { onclick: async () => { const n = await U.prompt('Rename map', m.name); if (n) { m.name = n; save(); drawList(); } } }, '✏ Rename'),
           dm.isWeb ? null : h('button.small', { onclick: () => dm.server.openDisplay() }, '🖥 TV window'),
@@ -377,6 +430,7 @@ window.Maps = (() => {
     const drawn = { ...m, tokens: m.tokens.map(t => ({ ...t, img: t.file })), templates: aoePrev ? [...m.templates, aoePrev] : m.templates,
       drawings: stroke && stroke.pen ? [...m.drawings, stroke] : m.drawings, rulers: ruler ? [ruler] : [], pings: recentPings(m) };
     MapRender.draw(ctx, drawn, { image: background(m), tokenImages, fogAlpha: 0.55, highlight: cur && cur.name, showHidden: true, scale: view.s });
+    if (m.doors.length || m.showWalls) drawWalls(ctx, m);
     if (stroke && !stroke.pen) { ctx.save(); ctx.globalAlpha = 0.5; MapRender.applyOp(ctx, stroke.t === 'r' ? { ...stroke, t: 'h' } : stroke, m); ctx.restore(); }
     if (rectPrev) { ctx.save(); ctx.strokeStyle = rectPrev.t === 'r' ? '#8be08f' : '#ff8c84'; ctx.lineWidth = 2 / view.s; ctx.setLineDash([8 / view.s, 6 / view.s]); ctx.strokeRect(rectPrev.x, rectPrev.y, rectPrev.w, rectPrev.h); ctx.restore(); }
   }
@@ -413,6 +467,7 @@ window.Maps = (() => {
         const tk = hitToken(p); if (tk) return tokenMenu(e, tk);
         const ov = hitOverlay(p); if (ov) { m[ov.list].splice(ov.i, 1); save(); render(); return; }
       }
+      if (tool === 'move' && e.button === 0 && !hitToken(p)) { const d = hitDoor(p); if (d) return toggleDoor(m, d); }
       if (e.button === 1 || e.button === 2 || (tool === 'move' && !hitToken(p))) { drag = { pan: true, sx: e.clientX, sy: e.clientY, vx: view.x, vy: view.y }; return; }
       if (tool === 'move') { const tk = hitToken(p); drag = { tk, dx: p.x - tk.x, dy: p.y - tk.y, fx: tk.x, fy: tk.y }; return; }
       if (tool === 'ping') { m.pings = [...recentPings(m), { x: p.x, y: p.y, t: Date.now(), color: 'gold', by: 'DM' }].slice(-6); save(); render(); return; }
@@ -428,6 +483,7 @@ window.Maps = (() => {
       const m = active(); if (!m) return;
       if (drag && drag.pan) { view.x = drag.vx + e.clientX - drag.sx; view.y = drag.vy + e.clientY - drag.sy; render(); return; }
       const p = toWorld(e.clientX, e.clientY);
+      if (!drag && !stroke && tool === 'move' && m.doors.length && e.target === els.canvas) els.canvas.style.cursor = hitDoor(p) ? 'pointer' : 'grab';
       if (drag && drag.tk) { drag.tk.x = p.x - drag.dx; drag.tk.y = p.y - drag.dy; render(); return; }
       if (drag && drag.ruler) { ruler.x2 = p.x; ruler.y2 = p.y; render(); save(); return; }
       if (drag && drag.aoe) { aoePrev.x2 = p.x; aoePrev.y2 = p.y; render(); return; }

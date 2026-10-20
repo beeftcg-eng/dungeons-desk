@@ -56,8 +56,8 @@ const EXTRA = `(() => { const p = Store.get().party[0];
   if (!p.sheet.inspiration || p.sheet.xp !== 900 || p.sheet.coins.gp !== 25) throw new Error('inspiration/xp/coins wrong: ' + JSON.stringify([p.sheet.inspiration, p.sheet.xp, p.sheet.coins.gp]));
   return 'party ok'; })()`;
 
-const r = spawnSync(path.join(ROOT, 'node_modules/electron/dist/electron'), ['--no-sandbox', '--disable-gpu', path.join(ROOT, 'scripts/smoke.js')], {
-  stdio: 'inherit', timeout: 240000,
+const r = spawnSync(process.execPath, [path.join(ROOT, 'scripts/run-electron.js'), path.join(ROOT, 'scripts/smoke.js'), '--disable-gpu'], {
+  stdio: 'inherit', timeout: 280000,
   env: { ...process.env, HOME: path.join(tmp, 'home'), SHOTS, CHECK: '1', VIEWS: 'session', PRE_session: `${PRE}.then(() => { ${DM_LATER} })`,
     PHONE: '1', PHONE_TABS: '', PHONE_PRE: "localStorage.setItem('dm.tour.done', '1'); localStorage.setItem('dd.whatsnew.player', '99'); setTimeout(() => location.reload(), 50); 1",
     PHONE_STEPS: STEPS.join('|||'), EXTRA },

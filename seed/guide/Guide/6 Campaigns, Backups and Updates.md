@@ -32,10 +32,10 @@ Dungeons Desk also runs on a phone at **beeftcg-eng.github.io/dungeons-desk**: t
 - **Signed in with another account?** The campaign stops syncing until you sign back in with its account, or choose **☁ Sync with this account instead**, which makes a fresh cloud copy in the new one. The character sheet app asks the same way: add the characters to the new account, or remove them from the phone (they stay in the old account).
 
 ## Cleaning up images 🧹
-Deleting a handout, map or token doesn't delete its picture. **⚙ Settings → Campaign → 🧹 Clean up images** finds pictures no note, handout, map or token uses any more and, after asking, moves them to the trash (on the phone app, it deletes them). Synced devices delete them too.
+Deleting a handout, map or token doesn't delete its picture. **⚙ Settings → Campaign → 🧹 Clean up images** finds pictures no note, handout, map or token uses any more, and animated map videos no map uses, and after asking moves them to the trash (on the phone app, it deletes them). Synced devices delete them too.
 
 ## Backups 💾
-On this computer, a full copy of the campaign is saved **once a day** in *Documents/Dungeons Desk Backups* (the last 14 are kept). Go to **⚙ Settings → Back up now** to make one any time. Your ★ homebrew library is copied once a day too, into *Documents/Dungeons Desk Backups/★ Homebrew Library* (also 14 kept); to restore a spell or item, copy its note back into a campaign's *Homebrew* folder. Each note also has its own 🕘 version history. On the phone app, back up by exporting a campaign file.
+On this computer, a full copy of the campaign is saved **once a day** in *Documents/Dungeons Desk Backups* (the last 14 are kept). Go to **⚙ Settings → Back up now** to make one any time. Animated map videos are left out, because they're so big: keep the files you exported. Your ★ homebrew library is copied once a day too, into *Documents/Dungeons Desk Backups/★ Homebrew Library* (also 14 kept); to restore a spell or item, copy its note back into a campaign's *Homebrew* folder. Each note also has its own 🕘 version history. On the phone app, back up by exporting a campaign file.
 
 ## Themes 🎨
 **⚙ Settings → Appearance** has these themes:

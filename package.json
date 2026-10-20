@@ -11,7 +11,7 @@
     "dist:linux": "electron-builder --linux",
     "dist:win": "electron-builder --win",
     "release": "node scripts/release.js",
-    "test": "node scripts/test-charsheet.js && node scripts/test-pdfchar.js && node scripts/test-bookimport.js && node scripts/test-homebrew.js && node scripts/test-library.js && node scripts/test-tablenotes.js && node scripts/test-server.js"
+    "test": "node scripts/test-charsheet.js && node scripts/test-pdfchar.js && node scripts/test-bookimport.js && node scripts/test-homebrew.js && node scripts/test-library.js && node scripts/test-tablenotes.js && node scripts/test-server.js && node scripts/test-mapsight.js"
   },
   "author": {
     "name": "beeftcg-eng",

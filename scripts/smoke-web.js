@@ -58,5 +58,6 @@ app.whenReady().then(() => server.listen(0, async () => {
     if (process.env.EXTRA) log('EXTRA', JSON.stringify(await js(process.env.EXTRA)));
   } catch (e) { fail('HARNESS', e && (e.stack || e.message)); }
   server.close();
+  fs.writeFileSync(OUT + '/result.txt', String(process.env.CHECK && failed ? 1 : 0)); // for scripts/run-electron.js
   if (process.env.CHECK) { process.stdout.write(fs.readFileSync(OUT + '/log.txt', 'utf8')); app.exit(failed ? 1 : 0); } else app.quit();
 }));

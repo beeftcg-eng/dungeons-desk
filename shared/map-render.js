@@ -3,6 +3,8 @@
 // Also: drawings [{ color, w, pts }], templates (AoE) [{ kind: circle|cone|line|cube, x, y, x2, y2, color }],
 // rulers [{ x, y, x2, y2, by }] and pings [{ x, y, t, color, by }]. 1 grid square = 5 ft.
 // Fog ops are applied in order: { t: 'r' (reveal) | 'h' (hide), s: 'rect', x, y, w, h } | { t, s: 'brush', r, pts: [x, y, ...] } | { t: 'r', s: 'all' }
+// | { t: 'r', s: 'sight', x, y, r, polys: [[x, y, ...], ...] } (what a token saw: polygons clipped to a circle).
+// Walls (from a Universal VTT file, DM side only): map.walls [[x, y, x, y, ...] polylines], map.doors [{ id, pts: [x1, y1, x2, y2], open }].
 (function () {
   const fogCache = new WeakMap();
 
@@ -33,6 +35,11 @@
       for (let i = 0; i < op.pts.length; i += 2) i ? x.lineTo(op.pts[i], op.pts[i + 1]) : x.moveTo(op.pts[i], op.pts[i + 1]);
       if (op.pts.length === 2) x.lineTo(op.pts[0] + 0.1, op.pts[1]);
       x.stroke();
+    } else if (op.s === 'sight') {
+      x.save(); x.beginPath(); x.arc(op.x, op.y, op.r, 0, Math.PI * 2); x.clip();
+      x.beginPath();
+      for (const p of op.polys) { for (let i = 0; i < p.length; i += 2) i ? x.lineTo(p[i], p[i + 1]) : x.moveTo(p[i], p[i + 1]); x.closePath(); }
+      x.fill('nonzero'); x.restore();
     }
     x.globalCompositeOperation = 'source-over';
   }
@@ -164,5 +171,89 @@
     }
   }
 
-  window.MapRender = { draw, fogCanvas, applyOp, templateShape, rulerFeet };
+  // ---------- Line of sight ----------
+  // Every wall piece and closed door as [x1, y1, x2, y2].
+  function segments(map) {
+    const out = [];
+    for (const w of map.walls || []) for (let i = 0; i + 3 < w.length; i += 2) out.push([w[i], w[i + 1], w[i + 2], w[i + 3]]);
+    for (const d of map.doors || []) if (!d.open) out.push(d.pts);
+    return out;
+  }
+  // How far along the ray (ox, oy) + t·(dx, dy) it meets segment s (Infinity if it doesn't); `ends` false ignores
+  // touching a segment's very ends, so a move can pass the end of a wall.
+  function hit(ox, oy, dx, dy, s, ends = true) {
+    const sx = s[2] - s[0], sy = s[3] - s[1], den = dx * sy - dy * sx;
+    if (Math.abs(den) < 1e-12) return Infinity;
+    const t = ((s[0] - ox) * sy - (s[1] - oy) * sx) / den, u = ((s[0] - ox) * dy - (s[1] - oy) * dx) / den, e = ends ? 0 : 1e-6;
+    return t >= 0 && u >= e && u <= 1 - e ? t : Infinity;
+  }
+  function distToSeg(px, py, s) {
+    const sx = s[2] - s[0], sy = s[3] - s[1], l = sx * sx + sy * sy;
+    const u = l ? Math.max(0, Math.min(1, ((px - s[0]) * sx + (py - s[1]) * sy) / l)) : 0;
+    return Math.hypot(px - s[0] - u * sx, py - s[1] - u * sy);
+  }
+  // What can be seen from (ox, oy) out to r (a square; the fog op clips it to a circle): a polygon [x, y, ...]. A ray
+  // goes at every wall end, and just either side of it, and stops at the first wall. Walls are put in buckets of a
+  // coarse grid so each ray only tests the walls in the buckets it crosses. Points along one straight edge are dropped.
+  function sight(segs, ox, oy, r) {
+    const near = segs.filter(s => distToSeg(ox, oy, s) < r * 1.42);
+    const cell = Math.max(20, r / 12), key = (cx, cy) => cx * 1e6 + cy, grid = new Map();
+    for (const s of near) {
+      const x0 = Math.floor(Math.min(s[0], s[2]) / cell), x1 = Math.floor(Math.max(s[0], s[2]) / cell);
+      const y0 = Math.floor(Math.min(s[1], s[3]) / cell), y1 = Math.floor(Math.max(s[1], s[3]) / cell);
+      for (let cx = x0; cx <= x1; cx++) for (let cy = y0; cy <= y1; cy++) { const k = key(cx, cy); (grid.get(k) || grid.set(k, []).get(k)).push(s); }
+    }
+    const cast = (dx, dy) => {
+      const box = Math.min(dx ? r / Math.abs(dx) : Infinity, dy ? r / Math.abs(dy) : Infinity);
+      let cx = Math.floor(ox / cell), cy = Math.floor(oy / cell), best = box;
+      const sx = dx > 0 ? 1 : -1, sy = dy > 0 ? 1 : -1, ddx = dx ? cell / Math.abs(dx) : Infinity, ddy = dy ? cell / Math.abs(dy) : Infinity;
+      let tx = dx ? ((cx + (dx > 0 ? 1 : 0)) * cell - ox) / dx : Infinity, ty = dy ? ((cy + (dy > 0 ? 1 : 0)) * cell - oy) / dy : Infinity;
+      for (;;) {
+        for (const s of grid.get(key(cx, cy)) || []) { const t = hit(ox, oy, dx, dy, s); if (t < best) best = t; }
+        const next = Math.min(tx, ty);
+        if (best <= next) return best;
+        if (tx < ty) { cx += sx; tx += ddx; } else { cy += sy; ty += ddy; }
+      }
+    };
+    const angles = new Set();
+    const aim = (px, py) => { const a = Math.atan2(py - oy, px - ox); angles.add(a - 1e-4).add(a).add(a + 1e-4); };
+    for (const s of near) { aim(s[0], s[1]); aim(s[2], s[3]); }
+    aim(ox - r, oy - r); aim(ox + r, oy - r); aim(ox + r, oy + r); aim(ox - r, oy + r);
+    const pts = [];
+    for (const a of [...angles].sort((a, b) => a - b)) {
+      const dx = Math.cos(a), dy = Math.sin(a), t = cast(dx, dy);
+      const x = Math.round(ox + dx * t), y = Math.round(oy + dy * t), n = pts.length;
+      if (n >= 2 && pts[n - 2] === x && pts[n - 1] === y) continue;
+      // Drop the middle one of three points in a line.
+      if (n >= 4) { const ax = pts[n - 4], ay = pts[n - 3], bx = pts[n - 2], by = pts[n - 1]; if (Math.abs((bx - ax) * (y - ay) - (by - ay) * (x - ax)) < 0.5 * Math.hypot(x - ax, y - ay)) pts.splice(n - 2, 2); }
+      pts.push(x, y);
+    }
+    return pts;
+  }
+  // Does going straight from (x1, y1) to (x2, y2) cross a wall or a closed door?
+  const blocked = (segs, x1, y1, x2, y2) => segs.some(s => hit(x1, y1, x2 - x1, y2 - y1, s, false) <= 1);
+
+  // ---------- Universal VTT files (.dd2vtt from Dungeon Alchemist, .uvtt, .df2vtt) ----------
+  // JSON with the grid (in squares), walls, doors and the map as a base64 picture. Returns what it holds, still in
+  // squares; layout() turns it into pixels for a map `w` pixels wide.
+  function fromVtt(j) {
+    const r = (j && j.resolution) || {}, ppg = Number(r.pixels_per_grid), size = r.map_size || {}, o = r.map_origin || {};
+    if (!(ppg > 0)) return null;
+    const b64 = typeof j.image === 'string' ? j.image.replace(/^data:[^,]*,/, '').replace(/\s+/g, '') : '';
+    const type = b64.startsWith('/9j/') ? 'jpeg' : b64.startsWith('UklGR') ? 'webp' : 'png';
+    const line = (l) => (Array.isArray(l) ? l : []).filter(p => p && isFinite(p.x) && isFinite(p.y)).map(p => [Number(p.x), Number(p.y)]);
+    return { ppg, cols: Number(size.x) || 0, ox: Number(o.x) || 0, oy: Number(o.y) || 0, still: b64 ? `data:image/${type};base64,${b64}` : null,
+      walls: [...(j.line_of_sight || []), ...(j.objects_line_of_sight || [])].map(line).filter(l => l.length >= 2),
+      doors: (j.portals || []).map(d => ({ pts: line(d && d.bounds), open: !!d && d.closed === false })).filter(d => d.pts.length === 2) };
+  }
+  function layout(v, w) {
+    const k = v.cols ? w / v.cols : v.ppg, round = (n) => Math.round(n * 100) / 100;
+    const off = (n) => round(((-n * k) % k + k) % k);
+    const px = ([x, y]) => [Math.round((x - v.ox) * k), Math.round((y - v.oy) * k)];
+    return { grid: { size: round(k), ox: off(v.ox), oy: off(v.oy) },
+      walls: v.walls.map(l => l.flatMap(px)),
+      doors: v.doors.map((d, i) => ({ id: 'd' + i, pts: d.pts.flatMap(px), open: d.open })) };
+  }
+
+  window.MapRender = { draw, fogCanvas, applyOp, templateShape, rulerFeet, segments, sight, blocked, distToSeg, fromVtt, layout };
 })();

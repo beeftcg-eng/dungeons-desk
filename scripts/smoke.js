@@ -54,6 +54,7 @@ app.on('browser-window-created', (_, w) => {
       }
       if (process.env.EXTRA) { try { log('EXTRA', JSON.stringify(await js(process.env.EXTRA))); } catch (e) { fail('EXTRA', e.message); } }
     } catch (e) { fail('HARNESS', e && (e.stack || e.message) || String(e)); }
+    fs.writeFileSync(OUT + '/result.txt', String(failed ? 1 : 0)); // for scripts/run-electron.js
     if (process.env.CHECK) { process.stdout.write(fs.readFileSync(OUT + '/log.txt', 'utf8')); app.exit(failed ? 1 : 0); } else app.quit();
   });
 });

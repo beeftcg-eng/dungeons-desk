@@ -51,7 +51,7 @@ jobs:
           for P in dm sheet play; do
             mkdir -p shots/$P
             echo "== $P"
-            SHOTS=shots/$P PAGE=$P CHECK=1 timeout 240 xvfb-run -a node_modules/electron/dist/electron --no-sandbox --disable-gpu scripts/smoke-web.js
+            SHOTS=shots/$P PAGE=$P CHECK=1 timeout 280 xvfb-run -a node scripts/run-electron.js scripts/smoke-web.js --disable-gpu
           done
       # The desktop app with a LAN game and a phone: recap, rest, Inspiration, XP, the level-up guide, treasure.
       - name: Phone page, end to end

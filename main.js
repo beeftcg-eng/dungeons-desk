@@ -42,6 +42,7 @@ function libList() {
 }
 const REPO = { owner: 'beeftcg-eng', repo: 'dungeons-desk' };
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|svg|avif|bmp)$/i;
+const VIDEO_EXT = /\.(mp4|m4v|webm)$/i;
 let config = { vault: path.join(docsDir(), 'Dungeons Desk Vault'), port: 7777, campaigns: [] };
 let win = null;
 let server = null;
@@ -130,8 +131,9 @@ function backupNow() {
   const dest = path.join(backupRoot(), stamp);
   fs.mkdirSync(dest, { recursive: true });
   const vault = path.resolve(config.vault);
-  // History snapshots are already a kind of backup; leave them out to keep backups small.
-  fs.cpSync(vault, dest, { recursive: true, filter: (src) => !path.resolve(src).startsWith(path.join(vault, '.dmtools', 'history')) });
+  // History snapshots are already a kind of backup; leave them out to keep backups small. Animated map videos too:
+  // they're often hundreds of MB, and the DM still has the files they exported.
+  fs.cpSync(vault, dest, { recursive: true, filter: (src) => !path.resolve(src).startsWith(path.join(vault, '.dmtools', 'history')) && !VIDEO_EXT.test(src) });
   config.backups = { ...(config.backups || {}), [vault]: Date.now() };
   saveConfig();
   const all = fs.readdirSync(backupRoot()).filter(d => /^\d{4}-/.test(d)).sort().reverse();
@@ -473,6 +475,8 @@ function registerIpc() {
     return true;
   };
   ipcMain.handle('media:delete', (_e, name) => trashImage(path.join(mediaDir(), path.basename(String(name)))));
+  // Animated map videos: listed apart from images (cloud sync uses media:list and never moves videos), with sizes.
+  ipcMain.handle('media:videos', () => { try { return fs.readdirSync(mediaDir()).filter(f => VIDEO_EXT.test(f)).map(name => ({ name, size: fs.statSync(path.join(mediaDir(), name)).size })); } catch { return []; } });
   ipcMain.handle('attach:delete', (_e, rel) => { const full = safe(rel); if (!IMAGE_EXT.test(full)) throw new Error('Not an image'); return trashImage(full); });
   ipcMain.handle('attach:read', (_e, rel) => { const full = safe(rel); if (!IMAGE_EXT.test(full)) throw new Error('Not an image'); return readImage(full); });
   ipcMain.handle('attach:write', (_e, rel, dataUrl) => { const full = safe(rel); if (!IMAGE_EXT.test(full)) throw new Error('Not an image'); return writeImage(full, dataUrl); });

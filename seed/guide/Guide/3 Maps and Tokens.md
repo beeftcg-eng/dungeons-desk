@@ -18,6 +18,13 @@ Maps can move: water flowing, torches flickering. In Dungeon Alchemist, export t
 - Untick **🎞️ Animated** to show the still picture instead. Players can also tap **⏸** on their phone to save battery.
 - Phones on the same Wi-Fi and the 🖥 TV window see it move. Online tables, other synced devices and campaign files get the still picture, because videos are too big to send.
 
+## Walls, doors and line of sight
+A `.dd2vtt` file also holds the map's **walls and doors**. They come in with it (or later, with **📐 Grid & walls from .dd2vtt**), and then:
+- Player tokens clear the fog only **where they can see**: not through walls or closed doors, and furniture like pillars casts shadows. **Fog clears around player tokens** sets how far they see.
+- Players **can't move their tokens through walls or closed doors**. Their phone says so and puts the token back. You can still move anything.
+- **Click a door** (✋ tool) to open or close it: orange is closed, green is open. Opening one shows players what's behind it.
+- **🧱 Walls & doors** in the side panel: turn walls off, **Show walls** to check they line up (only you see them), and **👁 Reveal what tokens see** after moving tokens around yourself.
+
 Press **📺 Show to players** to put the map on their phones and on the 🖥 TV window.
 
 ## Tokens

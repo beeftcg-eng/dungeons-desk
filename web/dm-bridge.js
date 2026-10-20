@@ -389,6 +389,7 @@ started: ${new Date().toISOString().slice(0, 10)}
         return name;
       }),
       list: r(async () => [...urls.media.keys()].filter(n => IMAGE_EXT.test(n))), // videos don't sync
+      videos: r(async () => (await all('blobs', inCampaign(cid))).filter(b => b.kind === 'media' && !IMAGE_EXT.test(b.name)).map(b => ({ name: b.name, size: b.blob.size }))),
       read: r(async (name) => { const b = await get('blobs', [cid, 'media', String(name).split('/').pop()]); if (!b) throw new Error('Not found'); return toDataUrl(b.blob); }),
       write: r(async (name, dataUrl) => { name = String(name).split('/').pop(); if (!/\.(png|jpe?g|gif|webp)$/i.test(name)) throw new Error('Unsupported image'); await saveBlob('media', name, dataUrl); return true; }),
       delete: r(async (name) => dropBlob('media', String(name).split('/').pop())),

@@ -86,8 +86,8 @@ window.Campaigns = (() => {
     ]);
   }
 
-  // Images nothing uses any more: media files the app state doesn't name (handouts, maps, tokens) and note images
-  // no note mentions. They go to the system trash on desktop; synced devices delete them too.
+  // Images nothing uses any more: media files the app state doesn't name (handouts, maps, tokens), note images
+  // no note mentions, and animated map videos no map uses (left by 🎞️ Remove animation or a deleted map). They go to the system trash on desktop; synced devices delete them too.
   async function cleanImages() {
     await Notes.flush();
     await Store.saveNow();
@@ -95,18 +95,21 @@ window.Campaigns = (() => {
     const used = (name) => text.includes(name) || text.includes(encodeURI(name)) || text.includes(encodeURIComponent(name));
     const media = (await dm.media.list()).filter(n => !used(n));
     const attach = (await dm.attach.list()).filter(p => !used(p.split('/').pop()));
-    if (!media.length && !attach.length) return toast('Every image is in use');
-    let bytes = 0;
+    const videos = (await dm.media.videos()).filter(v => !used(v.name));
+    if (!media.length && !attach.length && !videos.length) return toast('Every image is in use');
+    let bytes = videos.reduce((n, v) => n + v.size, 0);
     for (const n of media) bytes += ((await dm.media.read(n).catch(() => '')).length * 3) / 4;
     for (const p of attach) bytes += ((await dm.attach.read(p).catch(() => '')).length * 3) / 4;
     const n = media.length + attach.length, mb = (bytes / 1048576).toFixed(1);
-    const ok = await U.confirm('🧹 Clean up images', `${n} image${n === 1 ? ' isn\'t' : 's aren\'t'} used by any note, handout, map or token (${mb} MB)` +
+    const what = [n ? `${n} image${n === 1 ? '' : 's'}` : '', videos.length ? `${videos.length} map video${videos.length === 1 ? '' : 's'}` : ''].filter(Boolean).join(' and ');
+    const ok = await U.confirm('🧹 Clean up images', `${what} ${n + videos.length === 1 ? 'isn\'t' : 'aren\'t'} used by any note, handout, map or token (${mb} MB)` +
       (attach.length ? `, including ${attach.slice(0, 5).map(p => p.split('/').pop()).join(', ')}${attach.length > 5 ? '…' : ''}` : '') +
       (dm.isWeb ? '. Delete them from this device?' : '. Move them to the trash?') + (CloudSync.isLinked() ? ' Your other synced devices delete them too.' : ''));
     if (!ok) return;
     for (const x of media) await dm.media.delete(x);
     for (const x of attach) await dm.attach.delete(x);
-    toast(`Removed ${n} image${n === 1 ? '' : 's'}`);
+    for (const v of videos) await dm.media.delete(v.name);
+    toast(`Removed ${what}`);
     CloudSync.syncNow().catch(() => {});
   }
 
